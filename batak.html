@@ -30,9 +30,27 @@ body { display:flex; flex-direction:column; }
 .trump-symbol { font-size:22px; line-height:1; }
 .trump-name { font-size:12px; opacity:0.85; }
 #bid-info { font-size:11px; opacity:0.6; white-space:nowrap; }
-#sound-btn { background:none; border:none; color:var(--white); font-size:18px;
+#settings-btn { background:none; border:none; color:var(--white); font-size:18px;
   cursor:pointer; padding:2px 6px; opacity:0.6; flex-shrink:0; }
-#sound-btn:active { opacity:1; }
+#settings-btn:active { opacity:1; }
+
+/* ─── SETTINGS PANEL ─── */
+#settings-panel { display:none; position:absolute; top:36px; right:6px;
+  background:rgba(30,30,30,0.95); border-radius:10px; padding:14px 18px;
+  z-index:200; min-width:180px; box-shadow:0 4px 16px rgba(0,0,0,0.5);
+  backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
+#settings-panel.show { display:block; }
+#settings-panel h3 { font-size:14px; margin-bottom:10px; opacity:0.8; font-weight:normal; }
+.setting-row { display:flex; justify-content:space-between; align-items:center;
+  padding:6px 0; font-size:13px; }
+.setting-row label { opacity:0.85; }
+.toggle-switch { width:42px; height:24px; border-radius:12px; background:#555;
+  position:relative; cursor:pointer; transition:background 0.2s; flex-shrink:0; }
+.toggle-switch.on { background:#4caf50; }
+.toggle-switch::after { content:''; position:absolute; width:20px; height:20px;
+  border-radius:50%; background:#fff; top:2px; left:2px;
+  transition:transform 0.2s; box-shadow:0 1px 3px rgba(0,0,0,0.3); }
+.toggle-switch.on::after { transform:translateX(18px); }
 
 /* ─── SCORE BAR ─── */
 #scorebar { display:flex; justify-content:space-around; padding:3px 6px;
@@ -221,7 +239,14 @@ body { display:flex; flex-direction:column; }
   <span class="round-info" id="round-label">El 1/5</span>
   <span class="trump-info" id="trump-label"></span>
   <span id="bid-info"></span>
-  <button id="sound-btn" onclick="SFX.toggle()">🔊</button>
+  <button id="settings-btn" onclick="UI.toggleSettings()">⚙</button>
+</div>
+<div id="settings-panel">
+  <h3>Ayarlar</h3>
+  <div class="setting-row">
+    <label>Ses Efektleri</label>
+    <div id="sound-toggle" class="toggle-switch on" onclick="SFX.toggle()"></div>
+  </div>
 </div>
 <div id="scorebar">
   <div class="score-cell" id="sc-south"><div class="sname">Sen</div><div class="sval">0</div></div>
@@ -648,7 +673,8 @@ var SFX = (function() {
 
   function toggle() {
     enabled = !enabled;
-    document.getElementById('sound-btn').textContent = enabled ? '🔊' : '🔇';
+    var el = document.getElementById('sound-toggle');
+    if (el) el.classList.toggle('on', enabled);
     if (enabled) getCtx();
   }
 
@@ -782,6 +808,14 @@ var UI = (function() {
       tg.expand();
     }
     gs = Engine.createGameState();
+    document.addEventListener('click', function(e) {
+      var panel = document.getElementById('settings-panel');
+      var btn = document.getElementById('settings-btn');
+      if (panel && panel.classList.contains('show') &&
+          !panel.contains(e.target) && e.target !== btn) {
+        panel.classList.remove('show');
+      }
+    });
   }
 
   function startGame(rounds) {
@@ -1215,6 +1249,11 @@ var UI = (function() {
     document.getElementById('start-overlay').classList.add('show');
   }
 
+  function toggleSettings() {
+    var panel = document.getElementById('settings-panel');
+    panel.classList.toggle('show');
+  }
+
   return {
     init: init,
     startGame: startGame,
@@ -1222,7 +1261,8 @@ var UI = (function() {
     placeBid: placeBid,
     selectTrump: selectTrump,
     nextRound: nextRound,
-    showStart: showStart
+    showStart: showStart,
+    toggleSettings: toggleSettings
   };
 })();
 
