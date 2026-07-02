@@ -78,7 +78,7 @@ body { display:flex; flex-direction:column; }
   align-items:center; justify-content:center; overflow:hidden; min-height:0; }
 
 /* ─── BOT HANDS (card backs) ─── */
-.bot-hand { position:absolute; display:flex; }
+.bot-hand { position:absolute; display:flex; z-index:10; }
 #north-hand { top:8px; left:50%; transform:translateX(-50%); }
 #west-hand { left:8px; top:50%; transform:translateY(-50%) rotate(90deg); }
 #east-hand { right:8px; top:50%; transform:translateY(-50%) rotate(-90deg); }
@@ -92,7 +92,7 @@ body { display:flex; flex-direction:column; }
 
 /* ─── BOT NAME LABELS ─── */
 .bot-name { position:absolute; font-size:11px; opacity:0.7; text-align:center;
-  white-space:nowrap; }
+  white-space:nowrap; z-index:10; }
 #north-name { top:52px; left:50%; transform:translateX(-50%); }
 #west-name { left:52px; top:50%; transform:translateY(-50%); }
 #east-name { right:52px; top:50%; transform:translateY(-50%); }
@@ -103,9 +103,10 @@ body { display:flex; flex-direction:column; }
 }
 
 /* ─── TRICK AREA ─── */
-#trick-area { width:220px; height:170px; position:relative;
-  border-radius:50%;
-  box-shadow: inset 0 2px 15px rgba(0,0,0,0.25); }
+#trick-area { width:180px; height:140px; position:relative;
+  border-radius:12px;
+  box-shadow: inset 0 2px 10px rgba(0,0,0,0.2);
+  z-index:5; }
 .trick-card { position:absolute; }
 .trick-card[data-pos="south"] { bottom:4px; left:50%; transform:translateX(-50%);
   animation: slideFromSouth 250ms ease-out; }
@@ -229,7 +230,7 @@ body { display:flex; flex-direction:column; }
   .card .center { font-size:18px; }
   .hand-row .card { margin:0 -8px; }
   .trump-symbol { font-size:18px; }
-  #trick-area { width:190px; height:150px; }
+  #trick-area { width:160px; height:120px; }
 }
 </style>
 </head>
@@ -678,70 +679,55 @@ var SFX = (function() {
     if (enabled) getCtx();
   }
 
+  function playNote(freq, type, vol, start, dur) {
+    var c = getCtx(); if (!c) return;
+    var osc = c.createOscillator();
+    osc.type = type; osc.frequency.value = freq;
+    var g = c.createGain();
+    g.gain.setValueAtTime(0.001, start);
+    g.gain.linearRampToValueAtTime(vol, start + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, start + dur);
+    osc.connect(g).connect(c.destination);
+    osc.start(start); osc.stop(start + dur + 0.01);
+  }
+
   function cardPlay() {
     if (!enabled) return;
     var c = getCtx(); if (!c) return;
     var t = c.currentTime;
-    var len = c.sampleRate * 0.09;
+    var len = Math.floor(c.sampleRate * 0.06);
     var buf = c.createBuffer(1, len, c.sampleRate);
     var d = buf.getChannelData(0);
-    for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
-    var src = c.createBufferSource();
-    src.buffer = buf;
-    var bp = c.createBiquadFilter();
-    bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 1.2;
+    for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+    var src = c.createBufferSource(); src.buffer = buf;
+    var hp = c.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 1200;
     var g = c.createGain();
-    g.gain.setValueAtTime(0.5, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
-    src.connect(bp).connect(g).connect(c.destination);
-    src.start(t); src.stop(t + 0.09);
+    g.gain.setValueAtTime(0.3, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+    src.connect(hp).connect(g).connect(c.destination);
+    src.start(t); src.stop(t + 0.06);
   }
 
   function trickWin() {
     if (!enabled) return;
     var c = getCtx(); if (!c) return;
     var t = c.currentTime;
-    var osc = c.createOscillator();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(500, t);
-    osc.frequency.exponentialRampToValueAtTime(120, t + 0.25);
-    var g = c.createGain();
-    g.gain.setValueAtTime(0.35, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
-    osc.connect(g).connect(c.destination);
-    osc.start(t); osc.stop(t + 0.3);
+    playNote(440, 'sine', 0.15, t, 0.12);
+    playNote(554, 'sine', 0.12, t + 0.06, 0.15);
   }
 
   function bidRaise() {
     if (!enabled) return;
-    var c = getCtx(); if (!c) return;
-    var t = c.currentTime;
-    var osc = c.createOscillator();
-    osc.type = 'sine'; osc.frequency.value = 880;
-    var g = c.createGain();
-    g.gain.setValueAtTime(0.35, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
-    osc.connect(g).connect(c.destination);
-    osc.start(t); osc.stop(t + 0.15);
+    playNote(660, 'sine', 0.12, getCtx().currentTime, 0.1);
   }
 
   function bust() {
     if (!enabled) return;
     var c = getCtx(); if (!c) return;
     var t = c.currentTime;
-    var osc = c.createOscillator();
-    osc.type = 'square'; osc.frequency.value = 150;
-    var g = c.createGain();
-    g.gain.setValueAtTime(0.25, t);
-    var lfo = c.createOscillator();
-    lfo.frequency.value = 8;
-    var lfoG = c.createGain();
-    lfoG.gain.value = 0.15;
-    lfo.connect(lfoG).connect(g.gain);
-    lfo.start(t);
-    g.gain.linearRampToValueAtTime(0.001, t + 0.4);
-    osc.connect(g).connect(c.destination);
-    osc.start(t); osc.stop(t + 0.4); lfo.stop(t + 0.4);
+    playNote(220, 'sine', 0.12, t, 0.25);
+    playNote(196, 'sine', 0.10, t + 0.15, 0.25);
   }
 
   function win() {
@@ -749,39 +735,17 @@ var SFX = (function() {
     var c = getCtx(); if (!c) return;
     var t = c.currentTime;
     var notes = [523, 659, 784, 1047];
-    for (var i = 0; i < notes.length; i++) {
-      (function(idx) {
-        var osc = c.createOscillator();
-        osc.type = 'sine'; osc.frequency.value = notes[idx];
-        var g = c.createGain();
-        var st = t + idx * 0.1;
-        g.gain.setValueAtTime(0.001, st);
-        g.gain.linearRampToValueAtTime(0.35, st + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.001, st + 0.2);
-        osc.connect(g).connect(c.destination);
-        osc.start(st); osc.stop(st + 0.2);
-      })(i);
-    }
+    for (var i = 0; i < notes.length; i++)
+      playNote(notes[i], 'sine', 0.12, t + i * 0.1, 0.18);
   }
 
   function gameEnd() {
     if (!enabled) return;
     var c = getCtx(); if (!c) return;
     var t = c.currentTime;
-    var notes = [523, 659, 784, 1047, 1319, 1568];
-    for (var i = 0; i < notes.length; i++) {
-      (function(idx) {
-        var osc = c.createOscillator();
-        osc.type = 'sine'; osc.frequency.value = notes[idx];
-        var g = c.createGain();
-        var st = t + idx * 0.12;
-        g.gain.setValueAtTime(0.001, st);
-        g.gain.linearRampToValueAtTime(0.35, st + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.001, st + 0.4);
-        osc.connect(g).connect(c.destination);
-        osc.start(st); osc.stop(st + 0.4);
-      })(i);
-    }
+    var notes = [392, 523, 659, 784, 1047];
+    for (var i = 0; i < notes.length; i++)
+      playNote(notes[i], 'sine', 0.12, t + i * 0.13, 0.35);
   }
 
   function initAudio() { if (enabled) getCtx(); }
