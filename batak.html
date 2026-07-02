@@ -221,7 +221,7 @@ body { display:flex; flex-direction:column; }
   <span class="round-info" id="round-label">El 1/5</span>
   <span class="trump-info" id="trump-label"></span>
   <span id="bid-info"></span>
-  <button id="sound-btn" onclick="SFX.toggle()">🔇</button>
+  <button id="sound-btn" onclick="SFX.toggle()">🔊</button>
 </div>
 <div id="scorebar">
   <div class="score-cell" id="sc-south"><div class="sname">Sen</div><div class="sval">0</div></div>
@@ -334,9 +334,15 @@ var Engine = (function() {
     });
   }
 
-  function getLegalMoves(hand, trick, trumpSuit) {
+  function getLegalMoves(hand, trick, trumpSuit, trumpBroken) {
     if (!hand || hand.length === 0) return [];
-    if (!trick || trick.length === 0) return hand.slice();
+    if (!trick || trick.length === 0) {
+      if (trumpBroken === false) {
+        var nonTrump = hand.filter(function(c) { return c.suit !== trumpSuit; });
+        return nonTrump.length > 0 ? nonTrump : hand.slice();
+      }
+      return hand.slice();
+    }
 
     var ledSuit = trick[0].card.suit;
     var hasLedSuit = hand.some(function(c) { return c.suit === ledSuit; });
@@ -425,7 +431,8 @@ var Engine = (function() {
       currentPlayerIndex: 0,
       tricksWon: {south:0, west:0, north:0, east:0},
       totalScores: {south:0, west:0, north:0, east:0},
-      playedCards: []
+      playedCards: [],
+      trumpBroken: false
     };
   }
 
@@ -438,6 +445,7 @@ var Engine = (function() {
     state.trickNumber = 0;
     state.tricksWon = {south:0, west:0, north:0, east:0};
     state.playedCards = [];
+    state.trumpBroken = false;
     state.phase = 'BIDDING';
     state.currentPlayerIndex = (state.dealerIndex + 1) % 4;
   }
@@ -547,8 +555,8 @@ var BotAI = (function() {
     return best;
   }
 
-  function chooseCard(hand, trick, trumpSuit, playedCards) {
-    var legal = Engine.getLegalMoves(hand, trick, trumpSuit);
+  function chooseCard(hand, trick, trumpSuit, playedCards, trumpBroken) {
+    var legal = Engine.getLegalMoves(hand, trick, trumpSuit, trumpBroken);
     if (legal.length === 1) return legal[0];
 
     var ri = Engine.rankIndex;
@@ -627,10 +635,13 @@ var BotAI = (function() {
    ═══════════════════════════════════════════════════════════════════════════ */
 var SFX = (function() {
   var ctx = null;
-  var enabled = false;
+  var enabled = true;
 
   function getCtx() {
-    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (!ctx) {
+      try { ctx = new (window.AudioContext || window.webkitAudioContext)(); }
+      catch(e) { enabled = false; return null; }
+    }
     if (ctx.state === 'suspended') ctx.resume();
     return ctx;
   }
@@ -643,69 +654,74 @@ var SFX = (function() {
 
   function cardPlay() {
     if (!enabled) return;
-    var c = getCtx(), t = c.currentTime;
-    var len = c.sampleRate * 0.08;
+    var c = getCtx(); if (!c) return;
+    var t = c.currentTime;
+    var len = c.sampleRate * 0.09;
     var buf = c.createBuffer(1, len, c.sampleRate);
     var d = buf.getChannelData(0);
     for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
     var src = c.createBufferSource();
     src.buffer = buf;
     var bp = c.createBiquadFilter();
-    bp.type = 'bandpass'; bp.frequency.value = 800; bp.Q.value = 1.5;
+    bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 1.2;
     var g = c.createGain();
-    g.gain.setValueAtTime(0.25, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+    g.gain.setValueAtTime(0.5, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
     src.connect(bp).connect(g).connect(c.destination);
-    src.start(t); src.stop(t + 0.08);
+    src.start(t); src.stop(t + 0.09);
   }
 
   function trickWin() {
     if (!enabled) return;
-    var c = getCtx(), t = c.currentTime;
+    var c = getCtx(); if (!c) return;
+    var t = c.currentTime;
     var osc = c.createOscillator();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(400, t);
-    osc.frequency.exponentialRampToValueAtTime(100, t + 0.2);
+    osc.frequency.setValueAtTime(500, t);
+    osc.frequency.exponentialRampToValueAtTime(120, t + 0.25);
     var g = c.createGain();
-    g.gain.setValueAtTime(0.15, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+    g.gain.setValueAtTime(0.35, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
     osc.connect(g).connect(c.destination);
-    osc.start(t); osc.stop(t + 0.25);
+    osc.start(t); osc.stop(t + 0.3);
   }
 
   function bidRaise() {
     if (!enabled) return;
-    var c = getCtx(), t = c.currentTime;
+    var c = getCtx(); if (!c) return;
+    var t = c.currentTime;
     var osc = c.createOscillator();
     osc.type = 'sine'; osc.frequency.value = 880;
     var g = c.createGain();
-    g.gain.setValueAtTime(0.15, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    g.gain.setValueAtTime(0.35, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
     osc.connect(g).connect(c.destination);
-    osc.start(t); osc.stop(t + 0.12);
+    osc.start(t); osc.stop(t + 0.15);
   }
 
   function bust() {
     if (!enabled) return;
-    var c = getCtx(), t = c.currentTime;
+    var c = getCtx(); if (!c) return;
+    var t = c.currentTime;
     var osc = c.createOscillator();
     osc.type = 'square'; osc.frequency.value = 150;
     var g = c.createGain();
-    g.gain.setValueAtTime(0.12, t);
+    g.gain.setValueAtTime(0.25, t);
     var lfo = c.createOscillator();
     lfo.frequency.value = 8;
     var lfoG = c.createGain();
-    lfoG.gain.value = 0.08;
+    lfoG.gain.value = 0.15;
     lfo.connect(lfoG).connect(g.gain);
     lfo.start(t);
-    g.gain.linearRampToValueAtTime(0.001, t + 0.35);
+    g.gain.linearRampToValueAtTime(0.001, t + 0.4);
     osc.connect(g).connect(c.destination);
-    osc.start(t); osc.stop(t + 0.35); lfo.stop(t + 0.35);
+    osc.start(t); osc.stop(t + 0.4); lfo.stop(t + 0.4);
   }
 
   function win() {
     if (!enabled) return;
-    var c = getCtx(), t = c.currentTime;
+    var c = getCtx(); if (!c) return;
+    var t = c.currentTime;
     var notes = [523, 659, 784, 1047];
     for (var i = 0; i < notes.length; i++) {
       (function(idx) {
@@ -714,17 +730,18 @@ var SFX = (function() {
         var g = c.createGain();
         var st = t + idx * 0.1;
         g.gain.setValueAtTime(0.001, st);
-        g.gain.linearRampToValueAtTime(0.18, st + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.001, st + 0.18);
+        g.gain.linearRampToValueAtTime(0.35, st + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.001, st + 0.2);
         osc.connect(g).connect(c.destination);
-        osc.start(st); osc.stop(st + 0.18);
+        osc.start(st); osc.stop(st + 0.2);
       })(i);
     }
   }
 
   function gameEnd() {
     if (!enabled) return;
-    var c = getCtx(), t = c.currentTime;
+    var c = getCtx(); if (!c) return;
+    var t = c.currentTime;
     var notes = [523, 659, 784, 1047, 1319, 1568];
     for (var i = 0; i < notes.length; i++) {
       (function(idx) {
@@ -733,15 +750,17 @@ var SFX = (function() {
         var g = c.createGain();
         var st = t + idx * 0.12;
         g.gain.setValueAtTime(0.001, st);
-        g.gain.linearRampToValueAtTime(0.18, st + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.001, st + 0.35);
+        g.gain.linearRampToValueAtTime(0.35, st + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.001, st + 0.4);
         osc.connect(g).connect(c.destination);
-        osc.start(st); osc.stop(st + 0.35);
+        osc.start(st); osc.stop(st + 0.4);
       })(i);
     }
   }
 
-  return { toggle:toggle, cardPlay:cardPlay, trickWin:trickWin,
+  function initAudio() { if (enabled) getCtx(); }
+
+  return { toggle:toggle, initAudio:initAudio, cardPlay:cardPlay, trickWin:trickWin,
            bidRaise:bidRaise, bust:bust, win:win, gameEnd:gameEnd };
 })();
 
@@ -766,6 +785,7 @@ var UI = (function() {
   }
 
   function startGame(rounds) {
+    SFX.initAudio();
     totalRounds = rounds;
     Engine.TOTAL_ROUNDS = rounds;
     document.getElementById('start-overlay').classList.remove('show');
@@ -853,7 +873,7 @@ var UI = (function() {
     var el = document.getElementById('player-hand');
     var hand = gs.hands.south || [];
     var isMyTurn = gs.phase === 'PLAYING' && Engine.PLAYERS[gs.currentPlayerIndex] === 'south';
-    var legal = isMyTurn ? Engine.getLegalMoves(hand, gs.currentTrick, gs.trumpSuit) : [];
+    var legal = isMyTurn ? Engine.getLegalMoves(hand, gs.currentTrick, gs.trumpSuit, gs.trumpBroken) : [];
     var legalKeys = {};
     for (var i = 0; i < legal.length; i++) legalKeys[Engine.cardKey(legal[i])] = true;
 
@@ -1035,7 +1055,7 @@ var UI = (function() {
       if (Engine.cardKey(hand[i]) === key) { card = hand[i]; cardIdx = i; break; }
     }
     if (!card) return;
-    var legal = Engine.getLegalMoves(hand, gs.currentTrick, gs.trumpSuit);
+    var legal = Engine.getLegalMoves(hand, gs.currentTrick, gs.trumpSuit, gs.trumpBroken);
     var isLegal = legal.some(function(c) { return Engine.cardKey(c) === key; });
     if (!isLegal) return;
 
@@ -1049,7 +1069,7 @@ var UI = (function() {
   function botPlayTurn() {
     var player = Engine.PLAYERS[gs.currentPlayerIndex];
     var hand = gs.hands[player];
-    var card = BotAI.chooseCard(hand, gs.currentTrick, gs.trumpSuit, gs.playedCards);
+    var card = BotAI.chooseCard(hand, gs.currentTrick, gs.trumpSuit, gs.playedCards, gs.trumpBroken);
     var idx = -1;
     for (var i = 0; i < hand.length; i++) {
       if (Engine.cardKey(hand[i]) === Engine.cardKey(card)) { idx = i; break; }
@@ -1062,6 +1082,13 @@ var UI = (function() {
   }
 
   function afterCardPlayed() {
+    if (!gs.trumpBroken && gs.currentTrick.length > 0) {
+      var last = gs.currentTrick[gs.currentTrick.length - 1];
+      if (last.card.suit === gs.trumpSuit && gs.currentTrick.length > 1 &&
+          gs.currentTrick[0].card.suit !== gs.trumpSuit) {
+        gs.trumpBroken = true;
+      }
+    }
     renderAll();
     if (gs.currentTrick.length < 4) {
       Engine.nextPlayer(gs);
@@ -1271,6 +1298,19 @@ var UI = (function() {
     var legal = Engine.getLegalMoves(hand, trick, 'clubs');
     assert(legal.length === 1 && legal[0].rank === '2' && legal[0].suit === 'hearts',
       '6. Tek legal kart (hearts 2)');
+  })();
+
+  (function() {
+    var hand = [c('clubs','A'), c('hearts','5'), c('diamonds','K')];
+    var legal = Engine.getLegalMoves(hand, [], 'clubs', false);
+    assert(legal.length === 2 && legal.every(function(c) { return c.suit !== 'clubs'; }),
+      '7. Koz kırılmamış — koz el olarak atılamaz');
+  })();
+
+  (function() {
+    var hand = [c('clubs','A'), c('clubs','K'), c('clubs','Q')];
+    var legal = Engine.getLegalMoves(hand, [], 'clubs', false);
+    assert(legal.length === 3, '8. Sadece koz var — koz kırılmasa da atabilir');
   })();
 
   log('\n=== resolveTrick ===');
