@@ -605,13 +605,13 @@ var BotAI = (function() {
         if (c.suit === trumpSuit) continue;
         var myCount = suitCount(hand, c.suit);
         var othersLeft = remainingInSuit(c.suit, hand, playedCards);
-        var score = ri(c.rank) * 2 + myCount * 3;
-        if (othersLeft <= 1) score += 5;
-        if (myCount >= 4) score += 3;
+        var score = (12 - ri(c.rank)) * 2 + myCount * 4;
+        if (ri(c.rank) >= 11 && !isHighestRemaining(c, hand, playedCards)) score -= 15;
+        if (othersLeft <= 1) score += 3;
         if (score > bestLeadScore) { bestLeadScore = score; bestLead = c; }
       }
       if (bestLead) return bestLead;
-      return legal[legal.length - 1];
+      return legal[0];
     }
 
     var winners = [];
@@ -626,21 +626,9 @@ var BotAI = (function() {
     }
 
     if (winners.length > 0) {
-      if (trick.length === 2) {
-        var highWin = winners[winners.length - 1];
-        if (isHighestRemaining(highWin, hand, playedCards)) return highWin;
+      for (var s = winners.length - 1; s >= 0; s--) {
+        if (isHighestRemaining(winners[s], hand, playedCards)) return winners[s];
       }
-
-      var nonTrumpWin = winners.filter(function(c) { return c.suit !== trumpSuit; });
-      if (nonTrumpWin.length > 0) {
-        for (var n = nonTrumpWin.length - 1; n >= 0; n--) {
-          if (isHighestRemaining(nonTrumpWin[n], hand, playedCards)) return nonTrumpWin[n];
-        }
-        return nonTrumpWin[nonTrumpWin.length - 1];
-      }
-
-      var lowTrumpWin = winners.filter(function(c) { return c.suit === trumpSuit; });
-      if (lowTrumpWin.length > 0) return lowTrumpWin[0];
       return winners[0];
     }
 
