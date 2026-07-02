@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>YokYok Batak</title>
+<style>
+:root {
+  --bg: #1a5c2a;
+  --felt: #2d7a3e;
+  --card-w: 52px;
+  --card-h: 74px;
+  --card-r: 6px;
+  --red: #d32f2f;
+  --black: #222;
+  --gold: #ffd700;
+  --white: #fff;
+  --dim: 0.35;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html,body { width:100%; height:100%; overflow:hidden; background:var(--bg);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  color:var(--white); user-select:none; -webkit-user-select:none; }
+body { display:flex; flex-direction:column; }
+
+/* ─── TOP BAR ─── */
+#topbar { display:flex; justify-content:space-between; align-items:center;
+  padding:4px 10px; font-size:13px; background:rgba(0,0,0,0.3); min-height:32px; }
+#topbar .trump-info { font-size:15px; font-weight:bold; }
+#topbar .round-info { opacity:0.8; }
+
+/* ─── SCORE BAR ─── */
+#scorebar { display:flex; justify-content:space-around; padding:2px 6px;
+  font-size:11px; background:rgba(0,0,0,0.15); }
+.score-cell { text-align:center; padding:2px 8px; }
+.score-cell.active { color:var(--gold); font-weight:bold; }
+.score-cell .sname { opacity:0.7; }
+
+/* ─── GAME AREA ─── */
+#gamearea { flex:1; position:relative; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; overflow:hidden; }
+
+/* ─── BOT HANDS (card backs) ─── */
+.bot-hand { position:absolute; display:flex; }
+#north-hand { top:8px; left:50%; transform:translateX(-50%); }
+#west-hand { left:8px; top:50%; transform:translateY(-50%) rotate(90deg); }
+#east-hand { right:8px; top:50%; transform:translateY(-50%) rotate(-90deg); }
+.card-back { width:28px; height:40px; background:linear-gradient(135deg,#1a237e,#283593);
+  border:1px solid #3949ab; border-radius:3px; margin:0 -8px;
+  box-shadow:0 1px 2px rgba(0,0,0,0.3); }
+
+/* ─── TRICK AREA ─── */
+#trick-area { width:200px; height:160px; position:relative; }
+.trick-card { position:absolute; transition:all 0.3s ease; }
+.trick-card[data-pos="south"] { bottom:0; left:50%; transform:translateX(-50%); }
+.trick-card[data-pos="west"]  { left:0; top:50%; transform:translateY(-50%); }
+.trick-card[data-pos="north"] { top:0; left:50%; transform:translateX(-50%); }
+.trick-card[data-pos="east"]  { right:0; top:50%; transform:translateY(-50%); }
+
+/* ─── PLAYER HAND ─── */
+#player-hand { padding:6px 0 10px; display:flex; justify-content:center;
+  align-items:flex-end; min-height:100px; flex-wrap:nowrap; }
+
+/* ─── CARDS ─── */
+.card { width:var(--card-w); height:var(--card-h); background:#fff; color:var(--black);
+  border:1px solid #bbb; border-radius:var(--card-r); display:flex;
+  flex-direction:column; padding:3px 5px; cursor:pointer;
+  box-shadow:0 2px 4px rgba(0,0,0,0.3); transition:transform 0.15s,box-shadow 0.15s,opacity 0.15s;
+  position:relative; flex-shrink:0; font-weight:bold; }
+.card .top { font-size:13px; line-height:1; }
+.card .center { flex:1; display:flex; align-items:center; justify-content:center; font-size:22px; }
+.card.red { color:var(--red); }
+.card.legal:hover, .card.legal:active { transform:translateY(-12px);
+  box-shadow:0 6px 12px rgba(0,0,0,0.4); }
+.card.illegal { opacity:var(--dim); cursor:not-allowed; pointer-events:none; }
+.card.played { opacity:0; transform:scale(0.5); pointer-events:none; }
+
+#player-hand .card { margin:0 -6px; }
+
+/* ─── BIDDING ─── */
+#bid-overlay { position:absolute; top:0; left:0; width:100%; height:100%;
+  background:rgba(0,0,0,0.7); display:none; flex-direction:column;
+  align-items:center; justify-content:center; z-index:100; }
+#bid-overlay.show { display:flex; }
+#bid-title { font-size:18px; margin-bottom:8px; }
+#bid-log { font-size:13px; margin-bottom:12px; max-height:100px; overflow-y:auto;
+  text-align:center; opacity:0.85; line-height:1.6; }
+#bid-buttons { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; max-width:300px; }
+#bid-buttons button { width:54px; height:40px; font-size:16px; font-weight:bold;
+  border:none; border-radius:6px; background:#37474f; color:#fff; cursor:pointer; }
+#bid-buttons button:active { background:#546e7a; }
+#bid-buttons button.pass-btn { background:#b71c1c; width:80px; }
+#bid-buttons button:disabled { opacity:0.3; cursor:not-allowed; }
+
+/* ─── TRUMP SELECT ─── */
+#trump-overlay { position:absolute; top:0; left:0; width:100%; height:100%;
+  background:rgba(0,0,0,0.7); display:none; flex-direction:column;
+  align-items:center; justify-content:center; z-index:100; }
+#trump-overlay.show { display:flex; }
+#trump-title { font-size:18px; margin-bottom:16px; }
+#trump-buttons { display:flex; gap:16px; }
+#trump-buttons button { width:64px; height:64px; font-size:32px;
+  border:none; border-radius:10px; background:#37474f; color:#fff; cursor:pointer; }
+#trump-buttons button:active { background:#546e7a; }
+
+/* ─── INFO OVERLAY (round end, game end) ─── */
+#info-overlay { position:absolute; top:0; left:0; width:100%; height:100%;
+  background:rgba(0,0,0,0.75); display:none; flex-direction:column;
+  align-items:center; justify-content:center; z-index:100; text-align:center; }
+#info-overlay.show { display:flex; }
+#info-content { background:rgba(255,255,255,0.1); border-radius:12px;
+  padding:20px 28px; max-width:320px; }
+#info-content h2 { margin-bottom:12px; font-size:20px; }
+#info-content table { width:100%; border-collapse:collapse; margin:10px 0; font-size:14px; }
+#info-content td,#info-content th { padding:4px 8px; text-align:center; }
+#info-content th { border-bottom:1px solid rgba(255,255,255,0.3); }
+#info-btn { margin-top:14px; padding:10px 32px; font-size:16px; font-weight:bold;
+  border:none; border-radius:8px; background:var(--gold); color:#222; cursor:pointer; }
+#info-btn:active { background:#ffca28; }
+
+/* ─── TRICK INFO (who won) ─── */
+#trick-info { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  font-size:15px; font-weight:bold; background:rgba(0,0,0,0.6);
+  padding:6px 14px; border-radius:8px; display:none; z-index:50; }
+#trick-info.show { display:block; }
+
+/* ─── RESPONSIVE ─── */
+@media (max-width:380px) {
+  :root { --card-w:44px; --card-h:64px; }
+  .card .top { font-size:11px; }
+  .card .center { font-size:18px; }
+  #player-hand .card { margin:0 -8px; }
+}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <span class="round-info" id="round-label">El 1/5</span>
+  <span class="trump-info" id="trump-label"></span>
+  <span id="dealer-label" style="opacity:0.7;font-size:12px"></span>
+</div>
+<div id="scorebar">
+  <div class="score-cell" id="sc-south"><div class="sname">Sen</div><div class="sval">0</div></div>
+  <div class="score-cell" id="sc-west"><div class="sname">Batı</div><div class="sval">0</div></div>
+  <div class="score-cell" id="sc-north"><div class="sname">Kuzey</div><div class="sval">0</div></div>
+  <div class="score-cell" id="sc-east"><div class="sname">Doğu</div><div class="sval">0</div></div>
+</div>
+
+<div id="gamearea">
+  <div id="north-hand" class="bot-hand"></div>
+  <div id="west-hand" class="bot-hand"></div>
+  <div id="east-hand" class="bot-hand"></div>
+  <div id="trick-area"></div>
+  <div id="trick-info"></div>
+
+  <div id="bid-overlay">
+    <div id="bid-title">İhale</div>
+    <div id="bid-log"></div>
+    <div id="bid-buttons"></div>
+  </div>
+
+  <div id="trump-overlay">
+    <div id="trump-title">Koz Seç</div>
+    <div id="trump-buttons">
+      <button onclick="UI.selectTrump('spades')">♠</button>
+      <button onclick="UI.selectTrump('hearts')">♥</button>
+      <button onclick="UI.selectTrump('diamonds')">♦</button>
+      <button onclick="UI.selectTrump('clubs')">♣</button>
+    </div>
+  </div>
+
+  <div id="info-overlay">
+    <div id="info-content"></div>
+  </div>
+</div>
+
+<div id="player-hand"></div>
+
+<script>
+'use strict';
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   [A] ENGINE — Saf oyun mantığı (DOM'a dokunmaz)
+   ═══════════════════════════════════════════════════════════════════════════ */
+var Engine = (function() {
+
+  var SUITS = ['spades','hearts','diamonds','clubs'];
+  var RANKS = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+  var SUIT_SYMBOLS = {spades:'♠', hearts:'♥', diamonds:'♦', clubs:'♣'};
+  var PLAYERS = ['south','west','north','east'];
+  var PLAYER_NAMES = {south:'Sen', west:'Batı', north:'Kuzey', east:'Doğu'};
+  var TOTAL_ROUNDS = 5;
+
+  function rankIndex(rank) { return RANKS.indexOf(rank); }
+
+  function cardKey(card) { return card.suit + '_' + card.rank; }
+
+  function createDeck() {
+    var deck = [];
+    for (var s = 0; s < SUITS.length; s++)
+      for (var r = 0; r < RANKS.length; r++)
+        deck.push({suit: SUITS[s], rank: RANKS[r]});
+    return deck;
+  }
+
+  // Seeded PRNG (mulberry32)
+  function mulberry32(a) {
+    return function() {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  function shuffle(deck, seed) {
+    var rng = (seed !== undefined) ? mulberry32(seed) : Math.random;
+    var d = deck.slice();
+    for (var i = d.length - 1; i > 0; i--) {
+      var j = Math.floor(rng() * (i + 1));
+      var tmp = d[i]; d[i] = d[j]; d[j] = tmp;
+    }
+    return d;
+  }
+
+  function dealCards(seed) {
+    var deck = shuffle(createDeck(), seed);
+    var hands = {south:[], west:[], north:[], east:[]};
+    for (var i = 0; i < 52; i++)
+      hands[PLAYERS[i % 4]].push(deck[i]);
+    return hands;
+  }
+
+  function sortHand(hand) {
+    return hand.slice().sort(function(a, b) {
+      var si = SUITS.indexOf(a.suit) - SUITS.indexOf(b.suit);
+      return si !== 0 ? si : rankIndex(a.rank) - rankIndex(b.rank);
+    });
+  }
+
+  function getLegalMoves(hand, trick, trumpSuit) {
+    if (!hand || hand.length === 0) return [];
+    if (!trick || trick.length === 0) return hand.slice();
+
+    var ledSuit = trick[0].card.suit;
+    var hasLedSuit = hand.some(function(c) { return c.suit === ledSuit; });
+
+    if (hasLedSuit) {
+      var sameSuit = hand.filter(function(c) { return c.suit === ledSuit; });
+      var highestOnTable = -1;
+      for (var i = 0; i < trick.length; i++) {
+        if (trick[i].card.suit === ledSuit)
+          highestOnTable = Math.max(highestOnTable, rankIndex(trick[i].card.rank));
+      }
+      var higher = sameSuit.filter(function(c) { return rankIndex(c.rank) > highestOnTable; });
+      return higher.length > 0 ? higher : sameSuit;
+    }
+
+    // Renk yok
+    var hasTrump = hand.some(function(c) { return c.suit === trumpSuit; });
+    if (hasTrump) {
+      var trumpCards = hand.filter(function(c) { return c.suit === trumpSuit; });
+      var highestTrumpOnTable = -1;
+      for (var j = 0; j < trick.length; j++) {
+        if (trick[j].card.suit === trumpSuit)
+          highestTrumpOnTable = Math.max(highestTrumpOnTable, rankIndex(trick[j].card.rank));
+      }
+      if (highestTrumpOnTable >= 0) {
+        var higherTrumps = trumpCards.filter(function(c) { return rankIndex(c.rank) > highestTrumpOnTable; });
+        return higherTrumps.length > 0 ? higherTrumps : trumpCards;
+      }
+      return trumpCards;
+    }
+
+    return hand.slice();
+  }
+
+  function resolveTrick(trick, trumpSuit) {
+    var winner = 0;
+    var ledSuit = trick[0].card.suit;
+    var bestRank = rankIndex(trick[0].card.rank);
+    var winnerIsTrump = (trick[0].card.suit === trumpSuit);
+
+    for (var i = 1; i < trick.length; i++) {
+      var c = trick[i].card;
+      if (c.suit === trumpSuit) {
+        if (!winnerIsTrump || rankIndex(c.rank) > bestRank) {
+          winner = i;
+          bestRank = rankIndex(c.rank);
+          winnerIsTrump = true;
+        }
+      } else if (c.suit === ledSuit && !winnerIsTrump) {
+        if (rankIndex(c.rank) > bestRank) {
+          winner = i;
+          bestRank = rankIndex(c.rank);
+        }
+      }
+    }
+    return trick[winner].player;
+  }
+
+  function scoreRound(bids, tricksWon) {
+    var scores = {};
+    for (var p in tricksWon) {
+      if (bids.winner === p) {
+        var bid = bids.amount;
+        var won = tricksWon[p];
+        if (won >= bid) {
+          scores[p] = bid + (won - bid);
+        } else {
+          scores[p] = -bid;
+        }
+      } else {
+        scores[p] = tricksWon[p];
+      }
+    }
+    return scores;
+  }
+
+  function createGameState() {
+    return {
+      phase: 'BIDDING',
+      round: 1,
+      dealerIndex: 0,
+      hands: {},
+      trumpSuit: null,
+      bids: {current: 3, winner: null, amount: 0, passed: {}, log: []},
+      currentTrick: [],
+      trickNumber: 0,
+      currentPlayerIndex: 0,
+      tricksWon: {south:0, west:0, north:0, east:0},
+      totalScores: {south:0, west:0, north:0, east:0},
+      playedCards: []
+    };
+  }
+
+  function startRound(state) {
+    state.hands = dealCards();
+    for (var p in state.hands) state.hands[p] = sortHand(state.hands[p]);
+    state.trumpSuit = null;
+    state.bids = {current: 3, winner: null, amount: 0, passed: {}, log: []};
+    state.currentTrick = [];
+    state.trickNumber = 0;
+    state.tricksWon = {south:0, west:0, north:0, east:0};
+    state.playedCards = [];
+    state.phase = 'BIDDING';
+    state.currentPlayerIndex = (state.dealerIndex + 1) % 4;
+  }
+
+  function nextPlayer(state) {
+    state.currentPlayerIndex = (state.currentPlayerIndex + 1) % 4;
+  }
+
+  return {
+    SUITS: SUITS, RANKS: RANKS, SUIT_SYMBOLS: SUIT_SYMBOLS,
+    PLAYERS: PLAYERS, PLAYER_NAMES: PLAYER_NAMES, TOTAL_ROUNDS: TOTAL_ROUNDS,
+    rankIndex: rankIndex, cardKey: cardKey,
+    createDeck: createDeck, shuffle: shuffle, dealCards: dealCards, sortHand: sortHand,
+    getLegalMoves: getLegalMoves, resolveTrick: resolveTrick, scoreRound: scoreRound,
+    createGameState: createGameState, startRound: startRound, nextPlayer: nextPlayer
+  };
+})();
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   [B] BOT AI — Deterministik, kural tabanlı
+   ═══════════════════════════════════════════════════════════════════════════ */
+var BotAI = (function() {
+
+  function handStrength(hand) {
+    var score = 0;
+    var suitCounts = {spades:0, hearts:0, diamonds:0, clubs:0};
+    var shortSuits = 0;
+
+    for (var i = 0; i < hand.length; i++) {
+      var c = hand[i];
+      suitCounts[c.suit]++;
+      if (c.rank === 'A') score += 2;
+      else if (c.rank === 'K') score += 1.5;
+      else if (c.rank === 'Q') score += 0.75;
+    }
+
+    for (var s in suitCounts) {
+      if (suitCounts[s] >= 5) score += 2;
+      if (suitCounts[s] <= 1) shortSuits++;
+    }
+    score += shortSuits * 1;
+
+    return score;
+  }
+
+  // Eşikler: 6+ → 4 bid, 8+ → 5, 10+ → 6, altı → pas
+  function decideBid(hand, currentBid) {
+    var str = handStrength(hand);
+    var maxBid = 0;
+    if (str >= 10) maxBid = 6;
+    else if (str >= 8) maxBid = 5;
+    else if (str >= 6) maxBid = 4;
+
+    if (maxBid > currentBid) return currentBid + 1;
+    if (maxBid === currentBid && currentBid <= 4) return currentBid + 1;
+    return 0; // pas
+  }
+
+  function chooseTrump(hand) {
+    var suitScore = {};
+    for (var s = 0; s < Engine.SUITS.length; s++) {
+      var suit = Engine.SUITS[s];
+      var cards = hand.filter(function(c) { return c.suit === suit; });
+      var sc = cards.length * 2;
+      for (var i = 0; i < cards.length; i++) {
+        sc += Engine.rankIndex(cards[i].rank);
+      }
+      suitScore[suit] = sc;
+    }
+    var best = Engine.SUITS[0];
+    for (var j = 1; j < Engine.SUITS.length; j++) {
+      if (suitScore[Engine.SUITS[j]] > suitScore[best]) best = Engine.SUITS[j];
+    }
+    return best;
+  }
+
+  function chooseCard(hand, trick, trumpSuit, playedCards) {
+    var legal = Engine.getLegalMoves(hand, trick, trumpSuit);
+    if (legal.length === 1) return legal[0];
+
+    if (trick.length === 0) {
+      // İlk kart: en düşük non-trump, yoksa en düşük trump
+      var nonTrump = legal.filter(function(c) { return c.suit !== trumpSuit; });
+      var pool = nonTrump.length > 0 ? nonTrump : legal;
+      pool.sort(function(a,b) { return Engine.rankIndex(a.rank) - Engine.rankIndex(b.rank); });
+      return pool[0];
+    }
+
+    var ledSuit = trick[0].card.suit;
+    var currentWinner = Engine.resolveTrick(trick, trumpSuit);
+    var testTrick = trick.slice();
+
+    // El alabilecek en düşük kartı bul
+    var winners = [];
+    for (var i = 0; i < legal.length; i++) {
+      testTrick = trick.concat([{player:'test', card:legal[i]}]);
+      if (Engine.resolveTrick(testTrick, trumpSuit) === 'test') {
+        winners.push(legal[i]);
+      }
+    }
+
+    if (winners.length > 0) {
+      winners.sort(function(a,b) { return Engine.rankIndex(a.rank) - Engine.rankIndex(b.rank); });
+      return winners[0];
+    }
+
+    // Alamıyorsa en düşük kartı at
+    legal.sort(function(a,b) { return Engine.rankIndex(a.rank) - Engine.rankIndex(b.rank); });
+    return legal[0];
+  }
+
+  return {
+    handStrength: handStrength,
+    decideBid: decideBid,
+    chooseTrump: chooseTrump,
+    chooseCard: chooseCard
+  };
+})();
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   [C] UI — DOM render + dokunmatik input
+   ═══════════════════════════════════════════════════════════════════════════ */
+var UI = (function() {
+
+  var gs; // gameState
+  var BOT_DELAY = 600;
+
+  function init() {
+    if (window.Telegram && window.Telegram.WebApp) {
+      var tg = window.Telegram.WebApp;
+      tg.ready();
+      tg.expand();
+      if (tg.themeParams && tg.themeParams.bg_color) {
+        document.documentElement.style.setProperty('--bg', tg.themeParams.secondary_bg_color || '#1a5c2a');
+      }
+    }
+    gs = Engine.createGameState();
+    Engine.startRound(gs);
+    renderAll();
+    startBidding();
+  }
+
+  // ─── RENDER ───
+  function renderAll() {
+    renderScores();
+    renderTopbar();
+    renderBotHands();
+    renderPlayerHand();
+    renderTrick();
+  }
+
+  function renderTopbar() {
+    var el = document.getElementById('round-label');
+    el.textContent = 'El ' + gs.round + '/' + Engine.TOTAL_ROUNDS;
+    var tl = document.getElementById('trump-label');
+    tl.textContent = gs.trumpSuit ? 'Koz: ' + Engine.SUIT_SYMBOLS[gs.trumpSuit] : '';
+    tl.style.color = (gs.trumpSuit === 'hearts' || gs.trumpSuit === 'diamonds') ? 'var(--red)' : 'var(--white)';
+    var dl = document.getElementById('dealer-label');
+    dl.textContent = 'Dağıtan: ' + Engine.PLAYER_NAMES[Engine.PLAYERS[gs.dealerIndex]];
+  }
+
+  function renderScores() {
+    for (var i = 0; i < Engine.PLAYERS.length; i++) {
+      var p = Engine.PLAYERS[i];
+      var cell = document.getElementById('sc-' + p);
+      cell.querySelector('.sval').textContent = gs.totalScores[p] +
+        (gs.phase === 'PLAYING' ? ' (' + gs.tricksWon[p] + ')' : '');
+      cell.classList.toggle('active', Engine.PLAYERS[gs.currentPlayerIndex] === p);
+    }
+  }
+
+  function renderBotHands() {
+    ['north','west','east'].forEach(function(p) {
+      var el = document.getElementById(p + '-hand');
+      var count = gs.hands[p] ? gs.hands[p].length : 0;
+      var html = '';
+      for (var i = 0; i < count; i++) html += '<div class="card-back"></div>';
+      el.innerHTML = html;
+    });
+  }
+
+  function renderPlayerHand() {
+    var el = document.getElementById('player-hand');
+    var hand = gs.hands.south || [];
+    var legal = [];
+    if (gs.phase === 'PLAYING' && Engine.PLAYERS[gs.currentPlayerIndex] === 'south') {
+      legal = Engine.getLegalMoves(hand, gs.currentTrick, gs.trumpSuit);
+    }
+    var legalKeys = {};
+    for (var i = 0; i < legal.length; i++) legalKeys[Engine.cardKey(legal[i])] = true;
+
+    var html = '';
+    for (var j = 0; j < hand.length; j++) {
+      var c = hand[j];
+      var isRed = (c.suit === 'hearts' || c.suit === 'diamonds');
+      var isLegal = legalKeys[Engine.cardKey(c)];
+      var cls = 'card' + (isRed ? ' red' : '') +
+        (gs.phase === 'PLAYING' && Engine.PLAYERS[gs.currentPlayerIndex] === 'south'
+          ? (isLegal ? ' legal' : ' illegal') : '');
+      html += '<div class="' + cls + '" data-key="' + Engine.cardKey(c) + '" onclick="UI.playCard(\'' + Engine.cardKey(c) + '\')">' +
+        '<div class="top">' + c.rank + Engine.SUIT_SYMBOLS[c.suit] + '</div>' +
+        '<div class="center">' + Engine.SUIT_SYMBOLS[c.suit] + '</div></div>';
+    }
+    el.innerHTML = html;
+  }
+
+  function renderTrick() {
+    var el = document.getElementById('trick-area');
+    var html = '';
+    for (var i = 0; i < gs.currentTrick.length; i++) {
+      var entry = gs.currentTrick[i];
+      var c = entry.card;
+      var isRed = (c.suit === 'hearts' || c.suit === 'diamonds');
+      html += '<div class="trick-card card' + (isRed ? ' red' : '') + '" data-pos="' + entry.player + '">' +
+        '<div class="top">' + c.rank + Engine.SUIT_SYMBOLS[c.suit] + '</div>' +
+        '<div class="center">' + Engine.SUIT_SYMBOLS[c.suit] + '</div></div>';
+    }
+    el.innerHTML = html;
+  }
+
+  // ─── BIDDING ───
+  function startBidding() {
+    gs.phase = 'BIDDING';
+    gs.bids = {current: 3, winner: null, amount: 0, passed: {}, log: []};
+    gs.currentPlayerIndex = (gs.dealerIndex + 1) % 4;
+    showBidOverlay();
+    if (Engine.PLAYERS[gs.currentPlayerIndex] !== 'south') {
+      setTimeout(botBidTurn, BOT_DELAY);
+    }
+  }
+
+  function showBidOverlay() {
+    var overlay = document.getElementById('bid-overlay');
+    overlay.classList.add('show');
+    renderBidLog();
+    renderBidButtons();
+  }
+
+  function renderBidLog() {
+    var el = document.getElementById('bid-log');
+    el.innerHTML = gs.bids.log.map(function(l) { return '<div>' + l + '</div>'; }).join('');
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function renderBidButtons() {
+    var el = document.getElementById('bid-buttons');
+    if (Engine.PLAYERS[gs.currentPlayerIndex] !== 'south') {
+      el.innerHTML = '<div style="opacity:0.6">' + Engine.PLAYER_NAMES[Engine.PLAYERS[gs.currentPlayerIndex]] + ' düşünüyor...</div>';
+      return;
+    }
+    var html = '';
+    for (var b = gs.bids.current + 1; b <= 13; b++) {
+      html += '<button onclick="UI.placeBid(' + b + ')">' + b + '</button>';
+    }
+    html += '<button class="pass-btn" onclick="UI.placeBid(0)">Pas</button>';
+    el.innerHTML = html;
+  }
+
+  function placeBid(amount) {
+    if (Engine.PLAYERS[gs.currentPlayerIndex] !== 'south') return;
+    processBid('south', amount);
+  }
+
+  function processBid(player, amount) {
+    var name = Engine.PLAYER_NAMES[player];
+    if (amount === 0) {
+      gs.bids.passed[player] = true;
+      gs.bids.log.push(name + ': Pas');
+    } else {
+      gs.bids.current = amount;
+      gs.bids.winner = player;
+      gs.bids.amount = amount;
+      gs.bids.log.push(name + ': ' + amount);
+    }
+
+    // Kaç kişi pas etmedi kontrol et
+    var activeBidders = 0;
+    for (var i = 0; i < Engine.PLAYERS.length; i++) {
+      if (!gs.bids.passed[Engine.PLAYERS[i]]) activeBidders++;
+    }
+
+    if (activeBidders <= 1 && gs.bids.winner) {
+      // İhale kazanıldı
+      gs.bids.log.push(Engine.PLAYER_NAMES[gs.bids.winner] + ' ihaleyi ' + gs.bids.amount + ' ile kazandı!');
+      renderBidLog();
+      setTimeout(function() {
+        document.getElementById('bid-overlay').classList.remove('show');
+        if (gs.bids.winner === 'south') {
+          showTrumpOverlay();
+        } else {
+          var trump = BotAI.chooseTrump(gs.hands[gs.bids.winner]);
+          gs.trumpSuit = trump;
+          gs.bids.log.push(Engine.PLAYER_NAMES[gs.bids.winner] + ' kozu seçti: ' + Engine.SUIT_SYMBOLS[trump]);
+          startPlaying();
+        }
+      }, 800);
+      return;
+    }
+
+    if (activeBidders === 0) {
+      gs.bids.log.push('Herkes pas dedi — yeniden dağıtılıyor...');
+      renderBidLog();
+      setTimeout(function() {
+        document.getElementById('bid-overlay').classList.remove('show');
+        Engine.startRound(gs);
+        renderAll();
+        startBidding();
+      }, 1200);
+      return;
+    }
+
+    // Sonraki aktif oyuncu
+    do {
+      Engine.nextPlayer(gs);
+    } while (gs.bids.passed[Engine.PLAYERS[gs.currentPlayerIndex]]);
+
+    renderBidLog();
+    renderBidButtons();
+
+    if (Engine.PLAYERS[gs.currentPlayerIndex] !== 'south') {
+      setTimeout(botBidTurn, BOT_DELAY);
+    }
+  }
+
+  function botBidTurn() {
+    var player = Engine.PLAYERS[gs.currentPlayerIndex];
+    var bid = BotAI.decideBid(gs.hands[player], gs.bids.current);
+    processBid(player, bid);
+  }
+
+  // ─── TRUMP SELECT ───
+  function showTrumpOverlay() {
+    document.getElementById('trump-overlay').classList.add('show');
+  }
+
+  function selectTrump(suit) {
+    gs.trumpSuit = suit;
+    document.getElementById('trump-overlay').classList.remove('show');
+    startPlaying();
+  }
+
+  // ─── PLAYING ───
+  function startPlaying() {
+    gs.phase = 'PLAYING';
+    gs.trickNumber = 0;
+    // İhaleyi alan ilk kartı açar
+    gs.currentPlayerIndex = Engine.PLAYERS.indexOf(gs.bids.winner);
+    renderAll();
+    if (Engine.PLAYERS[gs.currentPlayerIndex] !== 'south') {
+      setTimeout(botPlayTurn, BOT_DELAY);
+    }
+  }
+
+  function playCard(key) {
+    if (gs.phase !== 'PLAYING') return;
+    if (Engine.PLAYERS[gs.currentPlayerIndex] !== 'south') return;
+    var hand = gs.hands.south;
+    var card = null, cardIdx = -1;
+    for (var i = 0; i < hand.length; i++) {
+      if (Engine.cardKey(hand[i]) === key) { card = hand[i]; cardIdx = i; break; }
+    }
+    if (!card) return;
+    var legal = Engine.getLegalMoves(hand, gs.currentTrick, gs.trumpSuit);
+    var isLegal = legal.some(function(c) { return Engine.cardKey(c) === key; });
+    if (!isLegal) return;
+
+    hand.splice(cardIdx, 1);
+    gs.currentTrick.push({player: 'south', card: card});
+    gs.playedCards.push(card);
+    afterCardPlayed();
+  }
+
+  function botPlayTurn() {
+    var player = Engine.PLAYERS[gs.currentPlayerIndex];
+    var hand = gs.hands[player];
+    var card = BotAI.chooseCard(hand, gs.currentTrick, gs.trumpSuit, gs.playedCards);
+    var idx = -1;
+    for (var i = 0; i < hand.length; i++) {
+      if (Engine.cardKey(hand[i]) === Engine.cardKey(card)) { idx = i; break; }
+    }
+    hand.splice(idx, 1);
+    gs.currentTrick.push({player: player, card: card});
+    gs.playedCards.push(card);
+    afterCardPlayed();
+  }
+
+  function afterCardPlayed() {
+    renderAll();
+    if (gs.currentTrick.length < 4) {
+      Engine.nextPlayer(gs);
+      renderScores();
+      if (Engine.PLAYERS[gs.currentPlayerIndex] !== 'south') {
+        setTimeout(botPlayTurn, BOT_DELAY);
+      }
+      return;
+    }
+
+    // El tamamlandı
+    var winner = Engine.resolveTrick(gs.currentTrick, gs.trumpSuit);
+    gs.tricksWon[winner]++;
+    gs.trickNumber++;
+
+    showTrickInfo(Engine.PLAYER_NAMES[winner] + ' aldı!');
+
+    setTimeout(function() {
+      hideTrickInfo();
+      gs.currentTrick = [];
+      gs.currentPlayerIndex = Engine.PLAYERS.indexOf(winner);
+
+      if (gs.trickNumber >= 13) {
+        endRound();
+        return;
+      }
+
+      renderAll();
+      if (Engine.PLAYERS[gs.currentPlayerIndex] !== 'south') {
+        setTimeout(botPlayTurn, BOT_DELAY);
+      }
+    }, 1000);
+  }
+
+  function showTrickInfo(msg) {
+    var el = document.getElementById('trick-info');
+    el.textContent = msg;
+    el.classList.add('show');
+  }
+  function hideTrickInfo() {
+    document.getElementById('trick-info').classList.remove('show');
+  }
+
+  // ─── ROUND END ───
+  function endRound() {
+    var scores = Engine.scoreRound(gs.bids, gs.tricksWon);
+    for (var p in scores) gs.totalScores[p] += scores[p];
+    showRoundEnd(scores);
+  }
+
+  function showRoundEnd(scores) {
+    var overlay = document.getElementById('info-overlay');
+    var content = document.getElementById('info-content');
+    var isGameEnd = gs.round >= Engine.TOTAL_ROUNDS;
+    var title = isGameEnd ? 'Oyun Bitti!' : 'El ' + gs.round + ' Sonucu';
+
+    var battiLabel = '';
+    var bidWinner = gs.bids.winner;
+    if (scores[bidWinner] < 0) {
+      battiLabel = '<div style="color:var(--red);margin:6px 0">' +
+        Engine.PLAYER_NAMES[bidWinner] + ' battı! (-' + gs.bids.amount + ')</div>';
+    }
+
+    var html = '<h2>' + title + '</h2>' + battiLabel +
+      '<table><tr><th>Oyuncu</th><th>El</th><th>Bu El</th><th>Toplam</th></tr>';
+    for (var i = 0; i < Engine.PLAYERS.length; i++) {
+      var p = Engine.PLAYERS[i];
+      var sc = scores[p];
+      var scStr = sc > 0 ? '+' + sc : '' + sc;
+      html += '<tr><td>' + Engine.PLAYER_NAMES[p] +
+        (p === bidWinner ? ' (' + gs.bids.amount + ')' : '') +
+        '</td><td>' + gs.tricksWon[p] + '</td><td style="color:' +
+        (sc >= 0 ? '#4caf50' : 'var(--red)') + '">' + scStr +
+        '</td><td>' + gs.totalScores[p] + '</td></tr>';
+    }
+    html += '</table>';
+
+    if (isGameEnd) {
+      var maxScore = -999, winner = '';
+      for (var j = 0; j < Engine.PLAYERS.length; j++) {
+        var pl = Engine.PLAYERS[j];
+        if (gs.totalScores[pl] > maxScore) { maxScore = gs.totalScores[pl]; winner = pl; }
+      }
+      html += '<div style="font-size:18px;margin-top:8px;color:var(--gold)">' +
+        (winner === 'south' ? 'Kazandın! 🏆' : Engine.PLAYER_NAMES[winner] + ' kazandı!') + '</div>';
+      html += '<button id="info-btn" onclick="UI.newGame()">Yeni Oyun</button>';
+    } else {
+      html += '<button id="info-btn" onclick="UI.nextRound()">Sonraki El →</button>';
+    }
+
+    content.innerHTML = html;
+    overlay.classList.add('show');
+  }
+
+  function nextRound() {
+    document.getElementById('info-overlay').classList.remove('show');
+    gs.round++;
+    gs.dealerIndex = (gs.dealerIndex + 1) % 4;
+    Engine.startRound(gs);
+    renderAll();
+    startBidding();
+  }
+
+  function newGame() {
+    document.getElementById('info-overlay').classList.remove('show');
+    gs = Engine.createGameState();
+    Engine.startRound(gs);
+    renderAll();
+    startBidding();
+  }
+
+  return {
+    init: init,
+    playCard: playCard,
+    placeBid: placeBid,
+    selectTrump: selectTrump,
+    nextRound: nextRound,
+    newGame: newGame
+  };
+})();
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   [T] TEST — ?test=1 ile çalışır
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function() {
+  if (location.search.indexOf('test=1') === -1) {
+    UI.init();
+    return;
+  }
+
+  document.body.style.background = '#111';
+  document.body.innerHTML = '<pre id="tout" style="color:#0f0;padding:12px;font-size:13px;white-space:pre-wrap"></pre>';
+  var out = document.getElementById('tout');
+  var pass = 0, fail = 0;
+
+  function log(s) { out.textContent += s + '\n'; }
+  function assert(cond, label) {
+    if (cond) { pass++; log('  ✅ ' + label); }
+    else { fail++; log('  ❌ FAIL: ' + label); }
+  }
+  function cardKeysMatch(arr, expected) {
+    var keys = arr.map(function(c) { return Engine.cardKey(c); }).sort();
+    return JSON.stringify(keys) === JSON.stringify(expected.sort());
+  }
+  function c(suit, rank) { return {suit:suit, rank:rank}; }
+
+  // ─── getLegalMoves testleri ───
+  log('=== getLegalMoves ===');
+
+  // 1. Renk takibi
+  (function() {
+    var hand = [c('hearts','5'), c('hearts','K'), c('spades','A')];
+    var trick = [{player:'x', card:c('hearts','7')}];
+    var legal = Engine.getLegalMoves(hand, trick, 'clubs');
+    assert(legal.length === 1 && legal[0].rank === 'K', '1. Renk takibi + mecburi yükseltme (K döner, 5 dönmez)');
+  })();
+
+  // 2. Mecburi yükseltme — yüksek yoksa tüm aynı renk
+  (function() {
+    var hand = [c('hearts','3'), c('hearts','5'), c('spades','A')];
+    var trick = [{player:'x', card:c('hearts','K')}];
+    var legal = Engine.getLegalMoves(hand, trick, 'clubs');
+    assert(legal.length === 2 && cardKeysMatch(legal, ['hearts_3','hearts_5']),
+      '2. Yüksek yok — tüm aynı renk döner');
+  })();
+
+  // 3. Renk yok → koz zorunlu
+  (function() {
+    var hand = [c('clubs','3'), c('diamonds','J'), c('clubs','9')];
+    var trick = [{player:'x', card:c('hearts','7')}];
+    var legal = Engine.getLegalMoves(hand, trick, 'clubs');
+    assert(legal.length === 2 && legal.every(function(c) { return c.suit === 'clubs'; }),
+      '3. Renk yok — koz zorunlu (2 koz döner)');
+  })();
+
+  // 4. Koz üstüne yükseltme
+  (function() {
+    var hand = [c('clubs','3'), c('clubs','K'), c('diamonds','A')];
+    var trick = [{player:'x', card:c('hearts','7')}, {player:'y', card:c('clubs','10')}];
+    var legal = Engine.getLegalMoves(hand, trick, 'clubs');
+    assert(legal.length === 1 && legal[0].rank === 'K',
+      '4. Yerde koz var — daha yüksek koz zorunlu (K döner)');
+  })();
+
+  // 5. Serbest kart (renk+koz yok)
+  (function() {
+    var hand = [c('diamonds','5'), c('diamonds','K')];
+    var trick = [{player:'x', card:c('hearts','7')}];
+    var legal = Engine.getLegalMoves(hand, trick, 'clubs');
+    assert(legal.length === 2, '5. Renk+koz yok — serbest (2 kart döner)');
+  })();
+
+  // 6. Tek legal kart
+  (function() {
+    var hand = [c('hearts','2'), c('spades','J'), c('diamonds','Q')];
+    var trick = [{player:'x', card:c('hearts','A')}];
+    var legal = Engine.getLegalMoves(hand, trick, 'clubs');
+    assert(legal.length === 1 && legal[0].rank === '2' && legal[0].suit === 'hearts',
+      '6. Tek legal kart (hearts 2)');
+  })();
+
+  // ─── resolveTrick testleri ───
+  log('\n=== resolveTrick ===');
+
+  // 1. Düz renk
+  (function() {
+    var trick = [
+      {player:'south', card:c('hearts','7')},
+      {player:'west', card:c('hearts','K')},
+      {player:'north', card:c('hearts','3')},
+      {player:'east', card:c('hearts','J')}
+    ];
+    assert(Engine.resolveTrick(trick, 'clubs') === 'west', '1. Düz renk — K kazanır');
+  })();
+
+  // 2. Koz kesme
+  (function() {
+    var trick = [
+      {player:'south', card:c('hearts','A')},
+      {player:'west', card:c('clubs','2')},
+      {player:'north', card:c('hearts','K')},
+      {player:'east', card:c('hearts','3')}
+    ];
+    assert(Engine.resolveTrick(trick, 'clubs') === 'west', '2. Koz kesme — clubs 2 A\'yı keser');
+  })();
+
+  // 3. Çift koz
+  (function() {
+    var trick = [
+      {player:'south', card:c('hearts','A')},
+      {player:'west', card:c('clubs','5')},
+      {player:'north', card:c('clubs','Q')},
+      {player:'east', card:c('hearts','2')}
+    ];
+    assert(Engine.resolveTrick(trick, 'clubs') === 'north', '3. Çift koz — clubs Q kazanır');
+  })();
+
+  // 4. Renk kaçağı (koz yok, farklı renk)
+  (function() {
+    var trick = [
+      {player:'south', card:c('hearts','7')},
+      {player:'west', card:c('diamonds','A')},
+      {player:'north', card:c('hearts','3')},
+      {player:'east', card:c('spades','K')}
+    ];
+    assert(Engine.resolveTrick(trick, 'clubs') === 'south', '4. Renk kaçağı — led suit 7 kazanır');
+  })();
+
+  // ─── scoreRound testleri ───
+  log('\n=== scoreRound ===');
+
+  // 1. İhale tuttu
+  (function() {
+    var bids = {winner:'south', amount:5};
+    var won = {south:5, west:3, north:3, east:2};
+    var s = Engine.scoreRound(bids, won);
+    assert(s.south === 5 && s.west === 3 && s.north === 3 && s.east === 2,
+      '1. İhale tuttu (5/5) → south=+5');
+  })();
+
+  // 2. Battı
+  (function() {
+    var bids = {winner:'north', amount:6};
+    var won = {south:4, west:3, north:4, east:2};
+    var s = Engine.scoreRound(bids, won);
+    assert(s.north === -6 && s.south === 4, '2. Battı (4/6) → north=-6, south=+4');
+  })();
+
+  // 3. Fazla el
+  (function() {
+    var bids = {winner:'east', amount:4};
+    var won = {south:2, west:2, north:2, east:7};
+    var s = Engine.scoreRound(bids, won);
+    assert(s.east === 7 && s.south === 2, '3. Fazla el (7/4) → east=+7');
+  })();
+
+  log('\n══════════════════');
+  log('SONUÇ: ' + pass + ' geçti, ' + fail + ' başarısız');
+  if (fail === 0) log('TÜM TESTLER GEÇTİ ✅');
+  else log('BAZI TESTLER BAŞARISIZ ❌');
+})();
+</script>
+</body>
+</html>
