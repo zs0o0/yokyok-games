@@ -6,11 +6,9 @@
 <title>YokYok Batak</title>
 <style>
 :root {
-  --bg: #1a5c2a;
-  --felt: #2d7a3e;
   --card-w: 52px;
-  --card-h: 74px;
-  --card-r: 6px;
+  --card-h: 76px;
+  --card-r: 8px;
   --red: #d32f2f;
   --black: #222;
   --gold: #ffd700;
@@ -18,23 +16,44 @@
   --dim: 0.35;
 }
 * { margin:0; padding:0; box-sizing:border-box; }
-html,body { width:100%; height:100%; overflow:hidden; background:var(--bg);
-  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-  color:var(--white); user-select:none; -webkit-user-select:none; }
+html,body { width:100%; height:100%; overflow:hidden;
+  background: radial-gradient(ellipse at center, #1a5c2e 0%, #145224 40%, #0d3318 100%);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: var(--white); user-select: none; -webkit-user-select: none; }
 body { display:flex; flex-direction:column; }
 
 /* ─── TOP BAR ─── */
 #topbar { display:flex; justify-content:space-between; align-items:center;
-  padding:4px 10px; font-size:13px; background:rgba(0,0,0,0.3); min-height:32px; }
-#topbar .trump-info { font-size:15px; font-weight:bold; }
-#topbar .round-info { opacity:0.8; }
+  padding:4px 10px; font-size:13px; background:rgba(0,0,0,0.35); min-height:34px; gap:6px; }
+#topbar .round-info { opacity:0.8; white-space:nowrap; }
+.trump-info { font-weight:bold; display:flex; align-items:center; gap:4px; }
+.trump-symbol { font-size:22px; line-height:1; }
+.trump-name { font-size:12px; opacity:0.85; }
+#bid-info { font-size:11px; opacity:0.6; white-space:nowrap; }
+#sound-btn { background:none; border:none; color:var(--white); font-size:18px;
+  cursor:pointer; padding:2px 6px; opacity:0.6; flex-shrink:0; }
+#sound-btn:active { opacity:1; }
 
 /* ─── SCORE BAR ─── */
-#scorebar { display:flex; justify-content:space-around; padding:2px 6px;
-  font-size:11px; background:rgba(0,0,0,0.15); }
-.score-cell { text-align:center; padding:2px 8px; }
+#scorebar { display:flex; justify-content:space-around; padding:3px 6px;
+  font-size:11px; background:rgba(0,0,0,0.2); }
+.score-cell { text-align:center; padding:2px 8px; border-radius:4px; }
 .score-cell.active { color:var(--gold); font-weight:bold; }
-.score-cell .sname { opacity:0.7; }
+.score-cell .sname { opacity:0.7; font-size:10px; }
+.score-cell.flash-green { animation: flashGreen 700ms ease-out; }
+.score-cell.flash-red { animation: flashRed 700ms ease-out; }
+@keyframes flashGreen {
+  0%,100% { background:transparent; }
+  25% { background:rgba(76,175,80,0.5); }
+}
+@keyframes flashRed {
+  0%,100% { background:transparent; transform:translateX(0); }
+  10% { background:rgba(211,47,47,0.5); transform:translateX(-3px); }
+  30% { transform:translateX(3px); }
+  50% { transform:translateX(-2px); }
+  70% { transform:translateX(2px); }
+  90% { transform:translateX(0); }
+}
 
 /* ─── GAME AREA ─── */
 #gamearea { flex:1; position:relative; display:flex; flex-direction:column;
@@ -45,23 +64,59 @@ body { display:flex; flex-direction:column; }
 #north-hand { top:8px; left:50%; transform:translateX(-50%); }
 #west-hand { left:8px; top:50%; transform:translateY(-50%) rotate(90deg); }
 #east-hand { right:8px; top:50%; transform:translateY(-50%) rotate(-90deg); }
-.card-back { width:28px; height:40px; background:linear-gradient(135deg,#1a237e,#283593);
-  border:1px solid #3949ab; border-radius:3px; margin:0 -8px;
-  box-shadow:0 1px 2px rgba(0,0,0,0.3); }
+.card-back { width:28px; height:40px;
+  background:
+    repeating-linear-gradient(45deg, transparent, transparent 2px,
+      rgba(255,215,0,0.1) 2px, rgba(255,215,0,0.1) 4px),
+    linear-gradient(135deg, #8b1a1a 0%, #1a237e 100%);
+  border:1px solid #4a3060; border-radius:4px; margin:0 -8px;
+  box-shadow:0 1px 3px rgba(0,0,0,0.4); }
 
 /* ─── BOT NAME LABELS ─── */
-.bot-name { position:absolute; font-size:11px; opacity:0.7; text-align:center; }
+.bot-name { position:absolute; font-size:11px; opacity:0.7; text-align:center;
+  white-space:nowrap; }
 #north-name { top:52px; left:50%; transform:translateX(-50%); }
 #west-name { left:52px; top:50%; transform:translateY(-50%); }
 #east-name { right:52px; top:50%; transform:translateY(-50%); }
+.dots { animation: dotsPulse 1s infinite; font-weight:bold; letter-spacing:1px; }
+@keyframes dotsPulse {
+  0%,100% { opacity:0.2; }
+  50% { opacity:1; }
+}
 
 /* ─── TRICK AREA ─── */
-#trick-area { width:220px; height:170px; position:relative; }
+#trick-area { width:220px; height:170px; position:relative;
+  border-radius:50%;
+  box-shadow: inset 0 2px 15px rgba(0,0,0,0.25); }
 .trick-card { position:absolute; }
-.trick-card[data-pos="south"] { bottom:4px; left:50%; transform:translateX(-50%); }
-.trick-card[data-pos="west"]  { left:4px; top:50%; transform:translateY(-50%); }
-.trick-card[data-pos="north"] { top:4px; left:50%; transform:translateX(-50%); }
-.trick-card[data-pos="east"]  { right:4px; top:50%; transform:translateY(-50%); }
+.trick-card[data-pos="south"] { bottom:4px; left:50%; transform:translateX(-50%);
+  animation: slideFromSouth 250ms ease-out; }
+.trick-card[data-pos="west"]  { left:4px; top:50%; transform:translateY(-50%);
+  animation: slideFromWest 250ms ease-out; }
+.trick-card[data-pos="north"] { top:4px; left:50%; transform:translateX(-50%);
+  animation: slideFromNorth 250ms ease-out; }
+.trick-card[data-pos="east"]  { right:4px; top:50%; transform:translateY(-50%);
+  animation: slideFromEast 250ms ease-out; }
+@keyframes slideFromSouth {
+  from { opacity:0; transform:translateX(-50%) translateY(50px); }
+  to   { opacity:1; transform:translateX(-50%); }
+}
+@keyframes slideFromWest {
+  from { opacity:0; transform:translateY(-50%) translateX(-50px); }
+  to   { opacity:1; transform:translateY(-50%); }
+}
+@keyframes slideFromNorth {
+  from { opacity:0; transform:translateX(-50%) translateY(-50px); }
+  to   { opacity:1; transform:translateX(-50%); }
+}
+@keyframes slideFromEast {
+  from { opacity:0; transform:translateY(-50%) translateX(50px); }
+  to   { opacity:1; transform:translateY(-50%); }
+}
+.trick-card.collect {
+  transition: opacity 350ms ease-in;
+  opacity: 0 !important;
+}
 
 /* ─── PLAYER HAND ─── */
 #player-hand { padding:4px 0 8px; display:flex; flex-direction:column;
@@ -70,17 +125,18 @@ body { display:flex; flex-direction:column; }
 
 /* ─── CARDS ─── */
 .card { width:var(--card-w); height:var(--card-h); background:#fff; color:var(--black);
-  border:1px solid #bbb; border-radius:var(--card-r); display:flex;
-  flex-direction:column; padding:3px 5px; cursor:pointer;
-  box-shadow:0 2px 4px rgba(0,0,0,0.3); transition:transform 0.15s,box-shadow 0.15s,opacity 0.15s;
+  border:1px solid #ccc; border-radius:var(--card-r); display:flex;
+  flex-direction:column; padding:3px 5px; cursor:default;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.08);
+  transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
   position:relative; flex-shrink:0; font-weight:bold; }
 .card .top { font-size:13px; line-height:1; }
 .card .center { flex:1; display:flex; align-items:center; justify-content:center; font-size:22px; }
 .card.red { color:var(--red); }
-.card.legal:hover, .card.legal:active { transform:translateY(-12px);
-  box-shadow:0 6px 12px rgba(0,0,0,0.4); }
+.card.legal { cursor:pointer; }
+.card.legal:hover, .card.legal:active { transform:translateY(-8px);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.45), 0 0 0 2px var(--gold); }
 .card.illegal { opacity:var(--dim); cursor:not-allowed; pointer-events:none; }
-.card.played { opacity:0; transform:scale(0.5); pointer-events:none; }
 
 .hand-row .card { margin:0 -6px; }
 
@@ -92,15 +148,16 @@ body { display:flex; flex-direction:column; }
 .overlay-darker { background:rgba(0,0,0,0.75); }
 
 /* ─── START SCREEN ─── */
-#start-overlay { background:rgba(0,0,0,0.85); text-align:center; }
-#start-overlay h1 { font-size:28px; margin-bottom:6px; }
-#start-overlay .subtitle { font-size:14px; opacity:0.7; margin-bottom:24px; }
-#start-overlay .round-options { display:flex; gap:12px; }
-#start-overlay .round-opt { width:80px; height:70px; border:none; border-radius:10px;
-  background:#37474f; color:#fff; cursor:pointer; font-size:14px;
-  display:flex; flex-direction:column; align-items:center; justify-content:center; }
-#start-overlay .round-opt .num { font-size:28px; font-weight:bold; }
-#start-overlay .round-opt:active { background:#546e7a; }
+#start-overlay { background:rgba(0,0,0,0.88); text-align:center; }
+#start-overlay h1 { font-size:32px; margin-bottom:4px; }
+#start-overlay .subtitle { font-size:14px; opacity:0.6; margin-bottom:28px; }
+#start-overlay .round-options { display:flex; gap:14px; }
+#start-overlay .round-opt { width:84px; height:74px; border:none; border-radius:12px;
+  background:linear-gradient(135deg,#37474f,#455a64); color:#fff; cursor:pointer; font-size:14px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  box-shadow:0 3px 8px rgba(0,0,0,0.3); transition: transform 0.1s; }
+#start-overlay .round-opt .num { font-size:30px; font-weight:bold; }
+#start-overlay .round-opt:active { transform:scale(0.95); }
 
 /* ─── BIDDING ─── */
 #bid-overlay { }
@@ -109,8 +166,9 @@ body { display:flex; flex-direction:column; }
   text-align:center; opacity:0.85; line-height:1.6; }
 #bid-buttons { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; max-width:300px; }
 #bid-buttons button { width:54px; height:40px; font-size:16px; font-weight:bold;
-  border:none; border-radius:6px; background:#37474f; color:#fff; cursor:pointer; }
-#bid-buttons button:active { background:#546e7a; }
+  border:none; border-radius:6px; background:#37474f; color:#fff; cursor:pointer;
+  transition:transform 0.1s; }
+#bid-buttons button:active { transform:scale(0.93); background:#546e7a; }
 #bid-buttons button.pass-btn { background:#b71c1c; width:80px; }
 #bid-buttons button:disabled { opacity:0.3; cursor:not-allowed; }
 
@@ -118,25 +176,33 @@ body { display:flex; flex-direction:column; }
 #trump-title { font-size:18px; margin-bottom:16px; }
 #trump-buttons { display:flex; gap:16px; }
 #trump-buttons button { width:64px; height:64px; font-size:32px;
-  border:none; border-radius:10px; background:#37474f; color:#fff; cursor:pointer; }
-#trump-buttons button:active { background:#546e7a; }
+  border:none; border-radius:12px; background:#37474f; color:#fff; cursor:pointer;
+  box-shadow:0 3px 8px rgba(0,0,0,0.3); transition:transform 0.1s; }
+#trump-buttons button:active { transform:scale(0.93); background:#546e7a; }
 
 /* ─── INFO OVERLAY (round end, game end) ─── */
-#info-content { background:rgba(255,255,255,0.1); border-radius:12px;
-  padding:20px 28px; max-width:320px; text-align:center; }
+#info-content { background:rgba(255,255,255,0.1); border-radius:14px;
+  padding:20px 28px; max-width:320px; text-align:center;
+  backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); }
 #info-content h2 { margin-bottom:12px; font-size:20px; }
 #info-content table { width:100%; border-collapse:collapse; margin:10px 0; font-size:14px; }
-#info-content td,#info-content th { padding:4px 8px; text-align:center; }
-#info-content th { border-bottom:1px solid rgba(255,255,255,0.3); }
+#info-content td,#info-content th { padding:5px 8px; text-align:center; }
+#info-content th { border-bottom:1px solid rgba(255,255,255,0.3); font-size:12px; opacity:0.8; }
 #info-btn { margin-top:14px; padding:10px 32px; font-size:16px; font-weight:bold;
-  border:none; border-radius:8px; background:var(--gold); color:#222; cursor:pointer; }
-#info-btn:active { background:#ffca28; }
+  border:none; border-radius:8px; background:var(--gold); color:#222; cursor:pointer;
+  box-shadow:0 3px 8px rgba(0,0,0,0.3); transition:transform 0.1s; }
+#info-btn:active { transform:scale(0.95); background:#ffca28; }
 
 /* ─── TRICK INFO (who won) ─── */
 #trick-info { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
-  font-size:15px; font-weight:bold; background:rgba(0,0,0,0.6);
-  padding:6px 14px; border-radius:8px; display:none; z-index:50; }
-#trick-info.show { display:block; }
+  font-size:15px; font-weight:bold; background:rgba(0,0,0,0.65);
+  padding:8px 18px; border-radius:10px; display:none; z-index:50;
+  box-shadow:0 2px 8px rgba(0,0,0,0.3); }
+#trick-info.show { display:block; animation: fadeInUp 200ms ease-out; }
+@keyframes fadeInUp {
+  from { opacity:0; transform:translate(-50%,-50%) translateY(10px); }
+  to   { opacity:1; transform:translate(-50%,-50%); }
+}
 
 /* ─── RESPONSIVE ─── */
 @media (max-width:380px) {
@@ -144,6 +210,8 @@ body { display:flex; flex-direction:column; }
   .card .top { font-size:11px; }
   .card .center { font-size:18px; }
   .hand-row .card { margin:0 -8px; }
+  .trump-symbol { font-size:18px; }
+  #trick-area { width:190px; height:150px; }
 }
 </style>
 </head>
@@ -152,7 +220,8 @@ body { display:flex; flex-direction:column; }
 <div id="topbar">
   <span class="round-info" id="round-label">El 1/5</span>
   <span class="trump-info" id="trump-label"></span>
-  <span id="dealer-label" style="opacity:0.7;font-size:12px"></span>
+  <span id="bid-info"></span>
+  <button id="sound-btn" onclick="SFX.toggle()">🔇</button>
 </div>
 <div id="scorebar">
   <div class="score-cell" id="sc-south"><div class="sname">Sen</div><div class="sval">0</div></div>
@@ -554,22 +623,144 @@ var BotAI = (function() {
 
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   [C] UI — DOM render + dokunmatik input
+   [S] SFX — Web Audio API programatik ses
+   ═══════════════════════════════════════════════════════════════════════════ */
+var SFX = (function() {
+  var ctx = null;
+  var enabled = false;
+
+  function getCtx() {
+    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+
+  function toggle() {
+    enabled = !enabled;
+    document.getElementById('sound-btn').textContent = enabled ? '🔊' : '🔇';
+    if (enabled) getCtx();
+  }
+
+  function cardPlay() {
+    if (!enabled) return;
+    var c = getCtx(), t = c.currentTime;
+    var len = c.sampleRate * 0.08;
+    var buf = c.createBuffer(1, len, c.sampleRate);
+    var d = buf.getChannelData(0);
+    for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    var src = c.createBufferSource();
+    src.buffer = buf;
+    var bp = c.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.value = 800; bp.Q.value = 1.5;
+    var g = c.createGain();
+    g.gain.setValueAtTime(0.25, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+    src.connect(bp).connect(g).connect(c.destination);
+    src.start(t); src.stop(t + 0.08);
+  }
+
+  function trickWin() {
+    if (!enabled) return;
+    var c = getCtx(), t = c.currentTime;
+    var osc = c.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(400, t);
+    osc.frequency.exponentialRampToValueAtTime(100, t + 0.2);
+    var g = c.createGain();
+    g.gain.setValueAtTime(0.15, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+    osc.connect(g).connect(c.destination);
+    osc.start(t); osc.stop(t + 0.25);
+  }
+
+  function bidRaise() {
+    if (!enabled) return;
+    var c = getCtx(), t = c.currentTime;
+    var osc = c.createOscillator();
+    osc.type = 'sine'; osc.frequency.value = 880;
+    var g = c.createGain();
+    g.gain.setValueAtTime(0.15, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    osc.connect(g).connect(c.destination);
+    osc.start(t); osc.stop(t + 0.12);
+  }
+
+  function bust() {
+    if (!enabled) return;
+    var c = getCtx(), t = c.currentTime;
+    var osc = c.createOscillator();
+    osc.type = 'square'; osc.frequency.value = 150;
+    var g = c.createGain();
+    g.gain.setValueAtTime(0.12, t);
+    var lfo = c.createOscillator();
+    lfo.frequency.value = 8;
+    var lfoG = c.createGain();
+    lfoG.gain.value = 0.08;
+    lfo.connect(lfoG).connect(g.gain);
+    lfo.start(t);
+    g.gain.linearRampToValueAtTime(0.001, t + 0.35);
+    osc.connect(g).connect(c.destination);
+    osc.start(t); osc.stop(t + 0.35); lfo.stop(t + 0.35);
+  }
+
+  function win() {
+    if (!enabled) return;
+    var c = getCtx(), t = c.currentTime;
+    var notes = [523, 659, 784, 1047];
+    for (var i = 0; i < notes.length; i++) {
+      (function(idx) {
+        var osc = c.createOscillator();
+        osc.type = 'sine'; osc.frequency.value = notes[idx];
+        var g = c.createGain();
+        var st = t + idx * 0.1;
+        g.gain.setValueAtTime(0.001, st);
+        g.gain.linearRampToValueAtTime(0.18, st + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.001, st + 0.18);
+        osc.connect(g).connect(c.destination);
+        osc.start(st); osc.stop(st + 0.18);
+      })(i);
+    }
+  }
+
+  function gameEnd() {
+    if (!enabled) return;
+    var c = getCtx(), t = c.currentTime;
+    var notes = [523, 659, 784, 1047, 1319, 1568];
+    for (var i = 0; i < notes.length; i++) {
+      (function(idx) {
+        var osc = c.createOscillator();
+        osc.type = 'sine'; osc.frequency.value = notes[idx];
+        var g = c.createGain();
+        var st = t + idx * 0.12;
+        g.gain.setValueAtTime(0.001, st);
+        g.gain.linearRampToValueAtTime(0.18, st + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.001, st + 0.35);
+        osc.connect(g).connect(c.destination);
+        osc.start(st); osc.stop(st + 0.35);
+      })(i);
+    }
+  }
+
+  return { toggle:toggle, cardPlay:cardPlay, trickWin:trickWin,
+           bidRaise:bidRaise, bust:bust, win:win, gameEnd:gameEnd };
+})();
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   [C] UI — DOM render + dokunmatik input + animasyon
    ═══════════════════════════════════════════════════════════════════════════ */
 var UI = (function() {
 
   var gs;
   var BOT_DELAY = 600;
   var totalRounds = 5;
+  var SUIT_NAMES_TR = {spades:'Maça', hearts:'Kupa', diamonds:'Karo', clubs:'Sinek'};
 
   function init() {
     if (window.Telegram && window.Telegram.WebApp) {
       var tg = window.Telegram.WebApp;
       tg.ready();
       tg.expand();
-      if (tg.themeParams && tg.themeParams.bg_color) {
-        document.documentElement.style.setProperty('--bg', tg.themeParams.secondary_bg_color || '#1a5c2a');
-      }
     }
     gs = Engine.createGameState();
   }
@@ -591,14 +782,29 @@ var UI = (function() {
     renderBotHands();
     renderPlayerHand();
     renderTrick();
+    renderThinking();
   }
 
   function renderTopbar() {
     document.getElementById('round-label').textContent = 'El ' + gs.round + '/' + totalRounds;
     var tl = document.getElementById('trump-label');
-    tl.textContent = gs.trumpSuit ? 'Koz: ' + Engine.SUIT_SYMBOLS[gs.trumpSuit] : '';
-    tl.style.color = (gs.trumpSuit === 'hearts' || gs.trumpSuit === 'diamonds') ? 'var(--red)' : 'var(--white)';
-    document.getElementById('dealer-label').textContent = 'Dağıtan: ' + Engine.PLAYER_NAMES[Engine.PLAYERS[gs.dealerIndex]];
+    if (gs.trumpSuit) {
+      var isRed = (gs.trumpSuit === 'hearts' || gs.trumpSuit === 'diamonds');
+      tl.innerHTML = '<span class="trump-symbol" style="color:' +
+        (isRed ? 'var(--red)' : 'var(--white)') + '">' +
+        Engine.SUIT_SYMBOLS[gs.trumpSuit] + '</span>' +
+        '<span class="trump-name">' + SUIT_NAMES_TR[gs.trumpSuit] + '</span>';
+    } else {
+      tl.innerHTML = '';
+    }
+    var bi = document.getElementById('bid-info');
+    if (gs.phase === 'PLAYING' && gs.bids.winner) {
+      bi.textContent = Engine.PLAYER_NAMES[gs.bids.winner] + ': ' + gs.bids.amount;
+    } else if (gs.phase === 'BIDDING' || gs.phase === 'START') {
+      bi.textContent = 'Dağıtan: ' + Engine.PLAYER_NAMES[Engine.PLAYERS[gs.dealerIndex]];
+    } else {
+      bi.textContent = '';
+    }
   }
 
   function renderScores() {
@@ -618,6 +824,19 @@ var UI = (function() {
       var html = '';
       for (var i = 0; i < count; i++) html += '<div class="card-back"></div>';
       el.innerHTML = html;
+    });
+  }
+
+  function renderThinking() {
+    var cur = Engine.PLAYERS[gs.currentPlayerIndex];
+    ['north','west','east'].forEach(function(p) {
+      var el = document.getElementById(p + '-name');
+      var isThinking = (gs.phase === 'PLAYING' || gs.phase === 'BIDDING') && cur === p;
+      if (isThinking) {
+        el.innerHTML = Engine.PLAYER_NAMES[p] + ' <span class="dots">...</span>';
+      } else {
+        el.textContent = Engine.PLAYER_NAMES[p];
+      }
     });
   }
 
@@ -662,6 +881,19 @@ var UI = (function() {
         makeCardHtml(entry.card, '', false) + '</div>';
     }
     el.innerHTML = html;
+  }
+
+  function collectTrickCards() {
+    var cards = document.querySelectorAll('.trick-card');
+    for (var i = 0; i < cards.length; i++) cards[i].classList.add('collect');
+  }
+
+  function flashScore(player, positive) {
+    var cell = document.getElementById('sc-' + player);
+    cell.classList.remove('flash-green', 'flash-red');
+    void cell.offsetWidth;
+    cell.classList.add(positive ? 'flash-green' : 'flash-red');
+    setTimeout(function() { cell.classList.remove('flash-green', 'flash-red'); }, 800);
   }
 
   // ─── BIDDING ───
@@ -716,6 +948,7 @@ var UI = (function() {
       gs.bids.winner = player;
       gs.bids.amount = amount;
       gs.bids.log.push(name + ': ' + amount);
+      SFX.bidRaise();
     }
 
     var activeBidders = 0;
@@ -758,6 +991,7 @@ var UI = (function() {
 
     renderBidLog();
     renderBidButtons();
+    renderThinking();
 
     if (Engine.PLAYERS[gs.currentPlayerIndex] !== 'south') {
       setTimeout(botBidTurn, BOT_DELAY);
@@ -808,6 +1042,7 @@ var UI = (function() {
     hand.splice(cardIdx, 1);
     gs.currentTrick.push({player: 'south', card: card});
     gs.playedCards.push(card);
+    SFX.cardPlay();
     afterCardPlayed();
   }
 
@@ -822,6 +1057,7 @@ var UI = (function() {
     hand.splice(idx, 1);
     gs.currentTrick.push({player: player, card: card});
     gs.playedCards.push(card);
+    SFX.cardPlay();
     afterCardPlayed();
   }
 
@@ -830,6 +1066,7 @@ var UI = (function() {
     if (gs.currentTrick.length < 4) {
       Engine.nextPlayer(gs);
       renderScores();
+      renderThinking();
       if (Engine.PLAYERS[gs.currentPlayerIndex] !== 'south') {
         setTimeout(botPlayTurn, BOT_DELAY);
       }
@@ -841,6 +1078,9 @@ var UI = (function() {
     gs.trickNumber++;
 
     showTrickInfo(Engine.PLAYER_NAMES[winner] + ' aldı!');
+    SFX.trickWin();
+
+    setTimeout(collectTrickCards, 550);
 
     setTimeout(function() {
       hideTrickInfo();
@@ -872,6 +1112,21 @@ var UI = (function() {
   function endRound() {
     var scores = Engine.scoreRound(gs.bids, gs.tricksWon);
     for (var p in scores) gs.totalScores[p] += scores[p];
+
+    for (var k = 0; k < Engine.PLAYERS.length; k++) {
+      var pl = Engine.PLAYERS[k];
+      flashScore(pl, scores[pl] >= 0);
+    }
+
+    var isGameEnd = gs.round >= totalRounds;
+    if (scores[gs.bids.winner] < 0) {
+      SFX.bust();
+    } else if (isGameEnd) {
+      SFX.gameEnd();
+    } else {
+      SFX.win();
+    }
+
     showRoundEnd(scores);
   }
 
@@ -909,10 +1164,10 @@ var UI = (function() {
         if (gs.totalScores[pl] > maxScore) { maxScore = gs.totalScores[pl]; winner = pl; }
       }
       html += '<div style="font-size:18px;margin-top:8px;color:var(--gold)">' +
-        (winner === 'south' ? 'Kazandın! 🏆' : Engine.PLAYER_NAMES[winner] + ' kazandı!') + '</div>';
+        (winner === 'south' ? 'Kazandın!' : Engine.PLAYER_NAMES[winner] + ' kazandı!') + '</div>';
       html += '<button id="info-btn" onclick="UI.showStart()">Yeni Oyun</button>';
     } else {
-      html += '<button id="info-btn" onclick="UI.nextRound()">Sonraki El →</button>';
+      html += '<button id="info-btn" onclick="UI.nextRound()">Sonraki El</button>';
     }
 
     content.innerHTML = html;
