@@ -171,7 +171,7 @@ body { display:flex; flex-direction:column; }
   box-shadow: 0 8px 16px rgba(0,0,0,0.45), 0 0 0 2px var(--gold); }
 .card.illegal { opacity:var(--dim); cursor:not-allowed; pointer-events:none; }
 
-.hand-row .card { margin:0 -6px; }
+.hand-row .card { margin:0 var(--row-margin, -6px); }
 
 /* ─── OVERLAYS (shared) ─── */
 .overlay { position:absolute; top:0; left:0; width:100%; height:100%;
@@ -923,7 +923,7 @@ var UI = (function() {
 
   function isPlayerControlledPlay(player) {
     if (player === 'south') return true;
-    if (player === 'north' && gs.gameMode === 'esli_acik') return true;
+    if (player === 'north' && gs.gameMode === 'esli_acik' && shouldShowPartner()) return true;
     return false;
   }
 
@@ -984,7 +984,7 @@ var UI = (function() {
     }
 
     if (gs.gameMode === 'esli_acik') {
-      ph.style.display = 'flex';
+      ph.style.display = 'none';
       nh.style.display = 'none';
       nn.style.display = 'none';
     } else {
@@ -1087,13 +1087,22 @@ var UI = (function() {
       }
       el.style.display = '';
       var isThinking = (gs.phase === 'PLAYING' || gs.phase === 'BIDDING') && cur === p;
-      if (gs.gameMode === 'esli_acik' && p === 'north' && gs.phase === 'PLAYING') isThinking = false;
+      if (gs.gameMode === 'esli_acik' && p === 'north' && gs.phase === 'PLAYING' && shouldShowPartner()) isThinking = false;
       if (isThinking) {
         el.innerHTML = Engine.PLAYER_NAMES[p] + ' <span class="dots">...</span>';
       } else {
         el.textContent = Engine.PLAYER_NAMES[p];
       }
     });
+  }
+
+  function wrapRow(cards, extraClass) {
+    if (cards.length === 0) return '';
+    var margin = -6;
+    if (cards.length > 10) margin = Math.max(-18, Math.round(-6 - (cards.length - 10) * 1.5));
+    var style = margin !== -6 ? ' style="--row-margin:' + margin + 'px"' : '';
+    var cls = 'hand-row' + (extraClass ? ' ' + extraClass : '');
+    return '<div class="' + cls + '"' + style + '>' + cards.join('') + '</div>';
   }
 
   function makeCardHtml(c, cls, clickable) {
@@ -1122,15 +1131,19 @@ var UI = (function() {
       else bottomRow.push(html);
     }
 
-    var out = '';
-    if (topRow.length > 0) out += '<div class="hand-row">' + topRow.join('') + '</div>';
-    if (bottomRow.length > 0) out += '<div class="hand-row">' + bottomRow.join('') + '</div>';
-    el.innerHTML = out;
+    el.innerHTML = wrapRow(topRow) + wrapRow(bottomRow);
+  }
+
+  function shouldShowPartner() {
+    if (gs.gameMode !== 'esli_acik') return false;
+    if (!gs.bids.winner) return false;
+    var bidTeam = Engine.TEAM_MAP[gs.bids.winner];
+    return bidTeam === 'a';
   }
 
   function renderPartnerHand() {
     var el = document.getElementById('partner-hand');
-    if (gs.gameMode !== 'esli_acik') { el.style.display = 'none'; return; }
+    if (!shouldShowPartner()) { el.style.display = 'none'; return; }
     el.style.display = 'flex';
 
     var hand = gs.hands.north || [];
@@ -1155,10 +1168,7 @@ var UI = (function() {
       else bottomRow.push(html);
     }
 
-    var out = '<div class="partner-label">Emre (Eşin)</div>';
-    if (topRow.length > 0) out += '<div class="hand-row">' + topRow.join('') + '</div>';
-    if (bottomRow.length > 0) out += '<div class="hand-row">' + bottomRow.join('') + '</div>';
-    el.innerHTML = out;
+    el.innerHTML = '<div class="partner-label">Emre (Eşin)</div>' + wrapRow(topRow) + wrapRow(bottomRow);
   }
 
   function renderTrick() {
@@ -1263,7 +1273,7 @@ var UI = (function() {
       setTimeout(function() {
         document.getElementById('bid-overlay').classList.remove('show');
         if (gs.gameMode === 'gommeli') {
-          handleBuryPhase();
+          handleGommeliPickup();
         } else {
           handleTrumpPhase();
         }
@@ -1290,15 +1300,20 @@ var UI = (function() {
     processBid(player, bid);
   }
 
-  // ─── BURY PHASE (gömmeli) ───
-  function handleBuryPhase() {
+  // ─── GÖMMELI: kartları al → koz → göm ───
+  function handleGommeliPickup() {
     var winner = gs.bids.winner;
     for (var i = 0; i < gs.buried.length; i++) {
       gs.hands[winner].push(gs.buried[i]);
     }
     gs.hands[winner] = Engine.sortHand(gs.hands[winner]);
     gs.buried = [];
+    if (winner === 'south') renderPlayerHand();
+    handleTrumpPhase();
+  }
 
+  function handleBuryPhase() {
+    var winner = gs.bids.winner;
     if (winner === 'south') {
       renderPlayerHand();
       showBuryOverlay();
@@ -1321,7 +1336,7 @@ var UI = (function() {
       }
     }
     gs.hands[player] = Engine.sortHand(gs.hands[player]);
-    handleTrumpPhase();
+    startPlaying();
   }
 
   function showBuryOverlay() {
@@ -1345,11 +1360,7 @@ var UI = (function() {
       if (c.suit === 'spades' || c.suit === 'hearts') topRow.push(html);
       else bottomRow.push(html);
     }
-    var container = document.getElementById('bury-cards');
-    var out = '';
-    if (topRow.length > 0) out += '<div class="hand-row">' + topRow.join('') + '</div>';
-    if (bottomRow.length > 0) out += '<div class="hand-row">' + bottomRow.join('') + '</div>';
-    container.innerHTML = out;
+    document.getElementById('bury-cards').innerHTML = wrapRow(topRow) + wrapRow(bottomRow);
 
     var count = Object.keys(burySelected).length;
     document.getElementById('bury-info').textContent = count + '/4 seçildi';
@@ -1380,7 +1391,7 @@ var UI = (function() {
     burySelected = {};
     document.getElementById('bury-overlay').classList.remove('show');
     renderPlayerHand();
-    showTrumpOverlay();
+    startPlaying();
   }
 
   // ─── TRUMP SELECT ───
@@ -1390,7 +1401,7 @@ var UI = (function() {
     } else {
       var trump = BotAI.chooseTrump(gs.hands[gs.bids.winner]);
       gs.trumpSuit = trump;
-      startPlaying();
+      afterTrumpSelected();
     }
   }
 
@@ -1401,7 +1412,15 @@ var UI = (function() {
   function selectTrump(suit) {
     gs.trumpSuit = suit;
     document.getElementById('trump-overlay').classList.remove('show');
-    startPlaying();
+    afterTrumpSelected();
+  }
+
+  function afterTrumpSelected() {
+    if (gs.gameMode === 'gommeli') {
+      handleBuryPhase();
+    } else {
+      startPlaying();
+    }
   }
 
   // ─── PLAYING ───
