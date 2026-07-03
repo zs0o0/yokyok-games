@@ -252,7 +252,7 @@ body { display:flex; flex-direction:column; }
 #bury-overlay.show { display:flex; }
 #bury-title { font-size:18px; margin-bottom:12px; }
 #bury-cards { display:flex; flex-direction:column; align-items:center; gap:2px; }
-#bury-cards .hand-row .card { width:44px; height:64px; margin:0 -5px; cursor:pointer; }
+#bury-cards .hand-row .card { width:44px; height:64px; margin:0 -5px; }
 #bury-cards .card .top { font-size:11px; }
 #bury-cards .card .center { font-size:18px; }
 #bury-cards .card.selected { transform:translateY(-10px);
@@ -263,6 +263,10 @@ body { display:flex; flex-direction:column; }
   cursor:pointer; transition:transform 0.1s; }
 #bury-btn:disabled { opacity:0.3; cursor:not-allowed; }
 #bury-btn:active { transform:scale(0.95); }
+@keyframes buryReveal {
+  from { opacity:0; transform:translateY(30px) scale(0.7); }
+  to   { opacity:1; transform:translateY(0) scale(1); }
+}
 
 /* ─── RESPONSIVE ─── */
 @media (max-width:380px) {
@@ -1379,12 +1383,31 @@ var UI = (function() {
         hand.splice(i, 1);
       }
     }
-    for (var k = 0; k < incoming.length; k++) hand.push(incoming[k]);
-    gs.hands.south = Engine.sortHand(gs.hands.south);
     burySelected = {};
-    document.getElementById('bury-overlay').classList.remove('show');
-    renderPlayerHand();
-    startPlaying();
+
+    document.getElementById('bury-title').textContent = 'Gelen Kartlar';
+    document.getElementById('bury-info').textContent = '';
+    document.getElementById('bury-btn').style.display = 'none';
+    var revealHtml = '';
+    for (var k = 0; k < incoming.length; k++) {
+      var c = incoming[k];
+      var isRed = (c.suit === 'hearts' || c.suit === 'diamonds');
+      revealHtml += '<div class="card' + (isRed ? ' red' : '') +
+        '" style="animation:buryReveal 400ms ease-out ' + (k * 150) + 'ms both">' +
+        '<div class="top">' + c.rank + Engine.SUIT_SYMBOLS[c.suit] + '</div>' +
+        '<div class="center">' + Engine.SUIT_SYMBOLS[c.suit] + '</div></div>';
+    }
+    document.getElementById('bury-cards').innerHTML = '<div class="hand-row">' + revealHtml + '</div>';
+
+    setTimeout(function() {
+      for (var m = 0; m < incoming.length; m++) hand.push(incoming[m]);
+      gs.hands.south = Engine.sortHand(gs.hands.south);
+      document.getElementById('bury-overlay').classList.remove('show');
+      document.getElementById('bury-title').textContent = '4 Kart Göm';
+      document.getElementById('bury-btn').style.display = '';
+      renderPlayerHand();
+      startPlaying();
+    }, 1800);
   }
 
   // ─── TRUMP SELECT ───
