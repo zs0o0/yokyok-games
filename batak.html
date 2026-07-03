@@ -1273,7 +1273,7 @@ var UI = (function() {
       setTimeout(function() {
         document.getElementById('bid-overlay').classList.remove('show');
         if (gs.gameMode === 'gommeli') {
-          handleGommeliPickup();
+          handleTrumpPhase();
         } else {
           handleTrumpPhase();
         }
@@ -1300,18 +1300,7 @@ var UI = (function() {
     processBid(player, bid);
   }
 
-  // ─── GÖMMELI: kartları al → koz → göm ───
-  function handleGommeliPickup() {
-    var winner = gs.bids.winner;
-    for (var i = 0; i < gs.buried.length; i++) {
-      gs.hands[winner].push(gs.buried[i]);
-    }
-    gs.hands[winner] = Engine.sortHand(gs.hands[winner]);
-    gs.buried = [];
-    if (winner === 'south') renderPlayerHand();
-    handleTrumpPhase();
-  }
-
+  // ─── GÖMMELI: koz → göm → gömü kartlarını al ───
   function handleBuryPhase() {
     var winner = gs.bids.winner;
     if (winner === 'south') {
@@ -1324,17 +1313,19 @@ var UI = (function() {
 
   function botBury(player) {
     var toBury = BotAI.chooseBury(gs.hands[player]);
+    var incoming = gs.buried.slice();
+    gs.buried = [];
     for (var i = 0; i < toBury.length; i++) {
       var key = Engine.cardKey(toBury[i]);
       for (var j = gs.hands[player].length - 1; j >= 0; j--) {
         if (Engine.cardKey(gs.hands[player][j]) === key) {
-          gs.buried.push(gs.hands[player][j]);
           gs.playedCards.push(gs.hands[player][j]);
           gs.hands[player].splice(j, 1);
           break;
         }
       }
     }
+    for (var k = 0; k < incoming.length; k++) gs.hands[player].push(incoming[k]);
     gs.hands[player] = Engine.sortHand(gs.hands[player]);
     startPlaying();
   }
@@ -1380,13 +1371,15 @@ var UI = (function() {
     var keys = Object.keys(burySelected);
     if (keys.length !== 4) return;
     var hand = gs.hands.south;
+    var incoming = gs.buried.slice();
+    gs.buried = [];
     for (var i = hand.length - 1; i >= 0; i--) {
       if (burySelected[Engine.cardKey(hand[i])]) {
-        gs.buried.push(hand[i]);
         gs.playedCards.push(hand[i]);
         hand.splice(i, 1);
       }
     }
+    for (var k = 0; k < incoming.length; k++) hand.push(incoming[k]);
     gs.hands.south = Engine.sortHand(gs.hands.south);
     burySelected = {};
     document.getElementById('bury-overlay').classList.remove('show');
