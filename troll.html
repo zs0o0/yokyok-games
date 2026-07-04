@@ -8,13 +8,31 @@
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
 <style>
 *{margin:0;padding:0}
+:root{
+  --safe-top:env(safe-area-inset-top,0px); --safe-bottom:env(safe-area-inset-bottom,0px);
+  --safe-left:env(safe-area-inset-left,0px); --safe-right:env(safe-area-inset-right,0px);
+}
 html,body{width:100%;height:100%;overflow:hidden;background:#0b0f1e;touch-action:none;overscroll-behavior:none;-webkit-user-select:none;user-select:none}
 #game{width:100%;height:100%}
 canvas{display:block}
+/* Dokunmatik kontroller: Phaser tuvalinin DISINDA, viewport'a sabit — letterbox/safe-area
+   kirpmasi ne olursa olsun HER ZAMAN tam gorunur (bkz. troll.html Telegram tam ekran notu) */
+.tbtn{ position:fixed; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  background:rgba(255,255,255,0.10); border:2px solid rgba(255,255,255,0.25); color:#fff;
+  font-family:monospace; font-weight:bold; -webkit-tap-highlight-color:transparent;
+  touch-action:none; user-select:none; z-index:1000; }
+#btn-left,#btn-right{ width:64px; height:64px; font-size:28px; bottom:calc(16px + var(--safe-bottom)); }
+#btn-left{ left:calc(16px + var(--safe-left)); }
+#btn-right{ left:calc(92px + var(--safe-left)); }
+#btn-jump{ width:76px; height:76px; font-size:32px; right:calc(16px + var(--safe-right)); bottom:calc(16px + var(--safe-bottom)); }
+.tbtn.active{ background:rgba(255,255,255,0.28); }
 </style>
 </head>
 <body>
 <div id="game"></div>
+<div id="btn-left"  class="tbtn">◀</div>
+<div id="btn-right" class="tbtn">▶</div>
+<div id="btn-jump"  class="tbtn">⬆</div>
 <script>
 'use strict';
 // ---- Telegram WebApp ----
@@ -40,19 +58,39 @@ function syncTgViewport(){
   document.body.style.height = h + 'px';
   try { if (game && game.scale) game.scale.refresh(); } catch(e){}
 }
-if (tg) {
-  syncTgViewport();
-  tg.onEvent && tg.onEvent('viewportChanged', syncTgViewport);
-  tg.onEvent && tg.onEvent('fullscreenChanged', syncTgViewport);
+// Telegram tam ekran modunda kendi UI'si (ust/alt cerceve) sayfamizin UZERINE biner —
+// bu alan viewport yuksekligine dahildir ama GORUNMEZ/tiklanamaz. contentSafeAreaInset
+// tam bunu verir; HTML kontrol butonlarini bu paya gore icerde tutuyoruz ki Telegram'in
+// kendi arayuzunun altinda kalip kirpilmasinlar (kullanicinin bildirdigi "butonlar
+// yarim gorunuyor" sikayetinin kok nedeni).
+function syncSafeArea(){
+  if (!tg) return;
+  const ci = tg.contentSafeAreaInset || {};
+  const si = tg.safeAreaInset || {};
+  const r = document.documentElement.style;
+  r.setProperty('--safe-top',    Math.max(ci.top||0, si.top||0) + 'px');
+  r.setProperty('--safe-bottom', Math.max(ci.bottom||0, si.bottom||0) + 'px');
+  r.setProperty('--safe-left',   Math.max(ci.left||0, si.left||0) + 'px');
+  r.setProperty('--safe-right',  Math.max(ci.right||0, si.right||0) + 'px');
 }
-window.addEventListener('orientationchange', ()=>setTimeout(syncTgViewport, 300));
+function syncTgLayout(){ syncTgViewport(); syncSafeArea(); }
+if (tg) {
+  syncTgLayout();
+  tg.onEvent && tg.onEvent('viewportChanged', syncTgLayout);
+  tg.onEvent && tg.onEvent('fullscreenChanged', syncTgLayout);
+  tg.onEvent && tg.onEvent('safeAreaChanged', syncTgLayout);
+  tg.onEvent && tg.onEvent('contentSafeAreaChanged', syncTgLayout);
+}
+window.addEventListener('orientationchange', ()=>setTimeout(syncTgLayout, 300));
 window.addEventListener('resize', ()=>{ try{ if (game && game.scale) game.scale.refresh(); }catch(e){} });
 
 // ---- Sabitler ----
 const W = 800, H = 450;
-// dokunmatikte butonlar icin tuval altina kontrol seridi eklenir
+// Dokunmatik kontroller artik HTML katmaninda (asagida) — tuval icinde kontrol seridine
+// yer ayirmaya gerek yok, tum CH oyun alanidir. Bu, yatay modda Phaser'in FIT olcegini
+// bosa harcanan 110px'lik seritten kurtarip ekranin daha genisini kullanmasini saglar.
 const TOUCH = ('ontouchstart' in window);
-const CH = TOUCH ? 560 : 450;
+const CH = H;
 const SPEED = 240, JUMPV = 540, GRAV = 1500; // ayni yukseklik (~97px), daha hizli yay
 const PCOL = 0x4a5878; // platform rengi (tuzaklar da ayni renk — bilerek)
 
@@ -141,7 +179,7 @@ class Play extends Phaser.Scene {
     this.keys = this.input.keyboard.addKeys('W,A,S,D,SPACE');
     this.input.addPointer(3);
     this.touch = {l:false, r:false};
-    if (TOUCH) this.mkButtons();
+    window.__scene = this; // DOM dokunmatik butonlari (asagida) bu referans uzerinden yazar
     this.mkPause();
   }
 
@@ -208,31 +246,6 @@ class Play extends Phaser.Scene {
     this.scene.restart();
   }
 
-  // dokunmatik butonlar: kontrol seridi (oyun alaninin altinda), solda yon, sagda ziplama
-  mkButtons(){
-    const by = (H+CH)/2;
-    this.add.rectangle(W/2, by, W, CH-H, 0x0a0e1c).setDepth(80);
-    this.add.rectangle(W/2, H+1, W, 2, 0x2a3550).setDepth(81);
-    const mk = (x,label)=>{
-      const c = this.add.circle(x,by,44,0xffffff,0.10).setDepth(90);
-      c.setStrokeStyle(2,0xffffff,0.25);
-      this.add.text(x,by,label,{fontFamily:'monospace',fontSize:'32px',fontStyle:'bold',color:'#ffffff'}).setOrigin(.5).setDepth(91).setAlpha(.55);
-      c.setInteractive(new Phaser.Geom.Circle(44,44,60), Phaser.Geom.Circle.Contains);
-      return c;
-    };
-    const hold = (c,set)=>{
-      const off = p=>{ if (c._pid===p.id){ c._pid=null; set(false); c.setFillStyle(0xffffff,0.10); } };
-      c.on('pointerdown', p=>{ c._pid=p.id; set(true); c.setFillStyle(0xffffff,0.28); });
-      c.on('pointerup', off); c.on('pointerout', off);
-      this.input.on('pointerup', off);
-    };
-    hold(mk(64,'◀'),  v=>this.touch.l=v);
-    hold(mk(172,'▶'), v=>this.touch.r=v);
-    const j = mk(732,'⬆');
-    j.on('pointerdown', ()=>{ this.jpress = true; j.setFillStyle(0xffffff,0.28); });
-    const joff = ()=>j.setFillStyle(0xffffff,0.10);
-    j.on('pointerup', joff); j.on('pointerout', joff);
-  }
 
   update(){
     if (this.dead || this.won || this.paused) return;
@@ -1285,6 +1298,25 @@ function genTower(s,lvl,rnd,diff){
   if (lvl>=45) s.trigger(0,800,()=>s.shadowsOn(1,3000), 116,20);
   if (diff>0.6) s.keyPad(kx,220);
   s.mkDoor(dx,130);
+}
+
+// ---- Dokunmatik butonlar (HTML katmani, Phaser tuvalinin disinda — bkz. CSS notu) ----
+if (!TOUCH) {
+  ['btn-left','btn-right','btn-jump'].forEach(id=>{ const el=document.getElementById(id); if (el) el.style.display='none'; });
+} else {
+  const bindHold = (id, onDown, onUp) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const down = e=>{ e.preventDefault(); el.classList.add('active'); onDown(); };
+    const up   = e=>{ el.classList.remove('active'); onUp(); };
+    el.addEventListener('pointerdown', down);
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+    el.addEventListener('pointerleave', up);
+  };
+  bindHold('btn-left',  ()=>{ if (window.__scene) window.__scene.touch.l = true;  }, ()=>{ if (window.__scene) window.__scene.touch.l = false; });
+  bindHold('btn-right', ()=>{ if (window.__scene) window.__scene.touch.r = true;  }, ()=>{ if (window.__scene) window.__scene.touch.r = false; });
+  bindHold('btn-jump',  ()=>{ if (window.__scene) window.__scene.jpress = true;  }, ()=>{});
 }
 
 // ---- Baslat ----
