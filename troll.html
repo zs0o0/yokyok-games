@@ -24,6 +24,9 @@ if (tg && tg.themeParams && tg.themeParams.bg_color) document.body.style.backgro
 
 // ---- Sabitler ----
 const W = 800, H = 450;
+// dokunmatikte butonlar icin tuval altina kontrol seridi eklenir
+const TOUCH = ('ontouchstart' in window);
+const CH = TOUCH ? 560 : 450;
 const SPEED = 210, JUMPV = 430, GRAV = 950;
 const PCOL = 0x4a5878; // platform rengi (tuzaklar da ayni renk — bilerek)
 
@@ -70,7 +73,7 @@ class Play extends Phaser.Scene {
     this.solids = this.add.group();
 
     // oyuncu
-    this.player = this.physics.add.image(46,400,'hero').setDepth(2);
+    this.player = this.physics.add.image(46,378,'hero').setDepth(2);
     this.player.body.setSize(22,28);
     this.player.setCollideWorldBounds(true);
     this.player.body.setGravityY(GRAV);
@@ -94,11 +97,35 @@ class Play extends Phaser.Scene {
     // girisler
     this.cursors = this.input.keyboard.createCursorKeys();
     this.keys = this.input.keyboard.addKeys('W,A,S,D,SPACE');
-    this.input.addPointer(2);
-    this.input.on('pointerdown', p=>{ p._sj=false; });
-    this.input.on('pointermove', p=>{
-      if (p.isDown && !p._sj && (p.downY - p.y) > 40){ p._sj=true; this.jq=this.time.now; }
-    });
+    this.input.addPointer(3);
+    this.touch = {l:false, r:false};
+    if (TOUCH) this.mkButtons();
+  }
+
+  // dokunmatik butonlar: kontrol seridi (oyun alaninin altinda), solda yon, sagda ziplama
+  mkButtons(){
+    const by = (H+CH)/2;
+    this.add.rectangle(W/2, by, W, CH-H, 0x0a0e1c).setDepth(80);
+    this.add.rectangle(W/2, H+1, W, 2, 0x2a3550).setDepth(81);
+    const mk = (x,label)=>{
+      const c = this.add.circle(x,by,44,0xffffff,0.10).setDepth(90);
+      c.setStrokeStyle(2,0xffffff,0.25);
+      this.add.text(x,by,label,{fontFamily:'monospace',fontSize:'32px',fontStyle:'bold',color:'#ffffff'}).setOrigin(.5).setDepth(91).setAlpha(.55);
+      c.setInteractive(new Phaser.Geom.Circle(44,44,60), Phaser.Geom.Circle.Contains);
+      return c;
+    };
+    const hold = (c,set)=>{
+      const off = p=>{ if (c._pid===p.id){ c._pid=null; set(false); c.setFillStyle(0xffffff,0.10); } };
+      c.on('pointerdown', p=>{ c._pid=p.id; set(true); c.setFillStyle(0xffffff,0.28); });
+      c.on('pointerup', off); c.on('pointerout', off);
+      this.input.on('pointerup', off);
+    };
+    hold(mk(64,'◀'),  v=>this.touch.l=v);
+    hold(mk(172,'▶'), v=>this.touch.r=v);
+    const j = mk(732,'⬆');
+    j.on('pointerdown', ()=>{ this.jq = this.time.now; j.setFillStyle(0xffffff,0.28); });
+    const joff = ()=>j.setFillStyle(0xffffff,0.10);
+    j.on('pointerup', joff); j.on('pointerout', joff);
   }
 
   update(){
@@ -109,11 +136,8 @@ class Play extends Phaser.Scene {
     let dir = 0;
     if (this.cursors.left.isDown  || this.keys.A.isDown) dir -= 1;
     if (this.cursors.right.isDown || this.keys.D.isDown) dir += 1;
-    const ptrs = this.input.manager.pointers;
-    for (let i=0;i<ptrs.length;i++){
-      const p = ptrs[i];
-      if (p.isDown) dir += (p.x < W/2 ? -1 : 1);
-    }
+    if (this.touch.l) dir -= 1;
+    if (this.touch.r) dir += 1;
     dir = Phaser.Math.Clamp(dir,-1,1);
     if (this.rev) dir *= -1;
     b.setVelocityX(dir*SPEED);
@@ -166,8 +190,8 @@ class Play extends Phaser.Scene {
   }
 
   hint(){
-    const msg = ('ontouchstart' in window)
-      ? 'Dokun: sol yarı = sola, sağ yarı = sağa | Zıpla: yukarı kaydır'
+    const msg = TOUCH
+      ? 'Sol: ◀ ▶ yön tuşları | Sağ: ⬆ zıplama'
       : '← → / A D : hareket | SPACE : zıpla';
     const t = this.add.text(W/2,86,msg,{fontFamily:'monospace',fontSize:'15px',color:'#9fb3d9',align:'center'}).setOrigin(.5).setDepth(100);
     this.tweens.add({targets:t,alpha:0,delay:3500,duration:600});
@@ -362,24 +386,24 @@ class Play extends Phaser.Scene {
 const LEVELS = [
 // 1: Guven insa et — durust platformer
 function(s){
-  s.plat(0,420,340,30); s.plat(460,420,340,30);
+  s.plat(0,400,340,50); s.plat(460,400,340,50);
   s.spikeRow(346,452,6,1);
   s.plat(352,368,96,14);
-  s.mkDoor(756,420);
+  s.mkDoor(756,400);
   s.hint();
 },
 // 2: Zemin gibi gorunen kopru... coker (nazik: titreyip haber verir)
 function(s){
-  s.plat(0,420,300,30);
-  s.fallPlat(300,420,100,30,220);
-  s.plat(400,420,400,30);
+  s.plat(0,400,300,50);
+  s.fallPlat(300,400,100,50,220);
+  s.plat(400,400,400,50);
   s.spikeRow(300,452,5,1);
-  s.mkDoor(750,420);
+  s.mkDoor(750,400);
 },
 // 3: Normal bolum, ama kapinin dibinde surpriz diken
 function(s){
-  s.plat(0,420,800,30);
-  s.spikeRow(300,420,3,1);
+  s.plat(0,400,800,50);
+  s.spikeRow(300,400,3,1);
   s.plat(430,376,90,14);
   s.plat(560,332,240,16);
   s.mkDoor(760,332);
@@ -387,73 +411,73 @@ function(s){
 },
 // 4: Coken zemin kosusu — dur ve ol
 function(s){
-  s.plat(0,420,150,30);
-  for (let i=0;i<6;i++) s.fallPlat(150+i*90,420,90,30,150);
-  s.plat(690,420,110,30);
+  s.plat(0,400,150,50);
+  for (let i=0;i<6;i++) s.fallPlat(150+i*90,400,90,50,150);
+  s.plat(690,400,110,50);
   s.spikeRow(150,452,27,1);
-  s.mkDoor(756,420);
+  s.mkDoor(756,400);
 },
 // 5: Dikenli duvar kovalar
 function(s){
-  s.plat(0,420,800,30);
-  s.spikeRow(300,420,3,1); s.spikeRow(520,420,3,1);
+  s.plat(0,400,800,50);
+  s.spikeRow(300,400,3,1); s.spikeRow(520,400,3,1);
   s.chaser(-40,150,600);
   s.time.delayedCall(600, ()=>s.toast('KAÇ!'));
-  s.mkDoor(760,420);
+  s.mkDoor(760,400);
 },
 // 6: Dikenler onunde firlar — kos-dur-kos ritmi
 function(s){
-  s.plat(0,420,800,30);
-  s.popSpikes(250,420,2,180,26,150);
-  s.popSpikes(430,420,2,360,26,150);
-  s.popSpikes(610,420,2,540,26,150);
-  s.mkDoor(760,420);
+  s.plat(0,400,800,50);
+  s.popSpikes(250,400,2,180,26,150);
+  s.popSpikes(430,400,2,360,26,150);
+  s.popSpikes(610,400,2,540,26,150);
+  s.mkDoor(760,400);
 },
 // 7: Kontroller ters doner
 function(s){
-  s.plat(0,420,800,30);
+  s.plat(0,400,800,50);
   s.reverseAt(340,true);
-  s.spikeRow(470,420,4,1);
-  s.spikeRow(640,420,2,1);
-  s.mkDoor(760,420);
+  s.spikeRow(470,400,4,1);
+  s.spikeRow(640,400,2,1);
+  s.mkDoor(760,400);
 },
 // 8: Yercekimi degisir — tavanda yuru
 function(s){
-  s.plat(0,420,800,30);
+  s.plat(0,400,800,50);
   s.plat(0,0,800,26);
-  s.spikeRow(360,420,14,1);
+  s.spikeRow(360,400,14,1);
   s.spikeRow(480,26,2,-1);
   s.gravityAt(300);
   s.gravityAt(648);
-  s.mkDoor(756,420);
+  s.mkDoor(756,400);
 },
 // 9: Ekran kararir, spot isigi kalir
 function(s){
-  s.plat(0,420,260,30); s.plat(340,420,140,30); s.plat(560,420,240,30);
+  s.plat(0,400,260,50); s.plat(340,400,140,50); s.plat(560,400,240,50);
   s.spikeRow(262,452,4,1); s.spikeRow(482,452,4,1);
   s.darknessAt(200);
-  s.mkDoor(756,420);
+  s.mkDoor(756,400);
 },
 // 10: Sahte "TEBRIKLER" — gercek kapi basladigin yerde
 function(s){
-  s.plat(0,420,800,30);
-  s.spikeRow(200,420,2,1);
-  s.mkDoor(700,420);
-  s.fakeWin(56,420,[
-    ()=>s.instantSpikes(380,420,4),
+  s.plat(0,400,800,50);
+  s.spikeRow(200,400,2,1);
+  s.mkDoor(700,400);
+  s.fakeWin(56,400,[
+    ()=>s.instantSpikes(380,400,4),
     ()=>s.chaser(830,-140,300)
   ]);
 },
 // 11: Kapi senden kacar — koseye sikistir
 function(s){
-  s.plat(0,420,800,30);
-  s.spikeRow(180,420,2,1); s.spikeRow(600,420,2,1);
-  s.mkDoor(400,420);
+  s.plat(0,400,800,50);
+  s.spikeRow(180,400,2,1); s.spikeRow(600,400,2,1);
+  s.mkDoor(400,400);
   s.fleeingDoor(3,120,200,50,750);
 },
 // 12: Kuculen platformlar — durma, eriyorlar
 function(s){
-  s.plat(0,420,140,30);
+  s.plat(0,400,140,50);
   s.shrinkPlat(220,360,110);
   s.shrinkPlat(400,300,110);
   s.shrinkPlat(580,240,110);
@@ -463,35 +487,35 @@ function(s){
 },
 // 13: Coken kopru + ters kontroller (kombo baslar)
 function(s){
-  s.plat(0,420,150,30);
-  for (let i=0;i<5;i++) s.fallPlat(150+i*90,420,90,30,160);
-  s.plat(600,420,200,30);
+  s.plat(0,400,150,50);
+  for (let i=0;i<5;i++) s.fallPlat(150+i*90,400,90,50,160);
+  s.plat(600,400,200,50);
   s.spikeRow(150,452,23,1);
   s.reverseAt(300,true);
-  s.mkDoor(756,420);
+  s.mkDoor(756,400);
 },
 // 14: Karanlik + kacan kapi + firlayan diken
 function(s){
-  s.plat(0,420,800,30);
+  s.plat(0,400,800,50);
   s.darknessAt(150);
-  s.popSpikes(340,420,2,280,26,140);
-  s.spikeRow(700,420,2,1);
-  s.mkDoor(500,420);
+  s.popSpikes(340,400,2,280,26,140);
+  s.spikeRow(700,400,2,1);
+  s.mkDoor(500,400);
   s.fleeingDoor(2,110,170,50,750);
 },
 // 15: Final — yercekimi + dikenli duvar + coken zemin
 function(s){
-  s.plat(0,420,320,30);
-  s.plat(700,420,100,30);
+  s.plat(0,400,320,50);
+  s.plat(700,400,100,50);
   s.plat(0,0,800,26);
-  s.fallPlat(560,420,70,30,150);
-  s.fallPlat(630,420,70,30,150);
+  s.fallPlat(560,400,70,50,150);
+  s.fallPlat(630,400,70,50,150);
   s.spikeRow(320,452,12,1);
   s.spikeRow(392,26,2,-1);
   s.gravityAt(280);
   s.gravityAt(560);
   s.chaser(-50,130,800);
-  s.mkDoor(756,420);
+  s.mkDoor(756,400);
 }
 ];
 
@@ -524,13 +548,13 @@ function genLevel(s,lvl){
 
   // platform plani: soldan saga, her sicrama fiziksel olarak mumkun
   // (max bosluk 145 < ziplama menzili ~185, max yukselis 85 < ziplama yuksekligi ~97)
-  const plan = [{x:0,y:420,w:130,t:'n'}];
-  let x=130, y=420;
+  const plan = [{x:0,y:400,w:130,t:'n'}];
+  let x=130, y=400;
   while (x < 600){
     const gap = Math.min(145, 55+rnd()*(45+50*diff));
     let w = Math.max(46, 115-58*diff+rnd()*50);
     let ny = y + Math.round(rnd()*170-85);
-    ny = Math.max(150, Math.min(410, ny));
+    ny = Math.max(150, Math.min(390, ny));
     if (y-ny > 85) ny = y-85;
     x += gap;
     if (x+w > 790) w = 790-x;
@@ -554,7 +578,7 @@ function genLevel(s,lvl){
 
   // platformlari kur
   plan.forEach((p,i)=>{
-    const h = (i===0) ? 30 : 14;
+    const h = (i===0) ? 50 : 14;
     if (p.t==='fall') s.fallPlat(p.x,p.y,p.w,h,Math.round(150-40*diff));
     else if (p.t==='shrink') s.shrinkPlat(p.x,p.y,p.w,h);
     else s.plat(p.x,p.y,p.w,h);
@@ -599,7 +623,7 @@ function genLevel(s,lvl){
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
-  width: W, height: H,
+  width: W, height: CH,
   backgroundColor: '#10142a',
   physics: { default:'arcade', arcade:{ gravity:{y:0}, debug:false } },
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
