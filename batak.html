@@ -676,7 +676,9 @@ var BotAI = (function() {
     return score;
   }
 
-  function decideBid(hand, currentBid, gameMode) {
+  // minBid: bu turda gecerli teklif icin gereken EN DUSUK sayi (Engine.currentTurnMinBid
+  // ile ayni mantik: bos ihalede acis startBid/dealerBid, doluysa current+1)
+  function decideBid(hand, minBid, gameMode) {
     var str = handStrength(hand);
     var maxBid = 0;
 
@@ -696,7 +698,7 @@ var BotAI = (function() {
     }
 
     // Tek turlu ihale: bot tek sansini kullanir, elinin gercek maksimumunu soyler
-    if (maxBid > currentBid) return maxBid;
+    if (maxBid >= minBid) return maxBid;
     return 0;
   }
 
@@ -1203,28 +1205,35 @@ var UI = (function() {
   }
 
   // ─── BIDDING ───
+  // Krupiye sırada EN SONdur. Herkes tek tur, tek hak konuşur (bkz. processBid).
+  // Sıra krupiyeye kimse yükseltmeden gelirse (current===0) krupiye PAS diyemez:
+  // mecburi sayıyı (dealerBid) alır YA DA isterse daha yükseğe teklif verir.
+  // Başka biri zaten yükseltmişse krupiye de herkes gibi normal pas/teklif verir.
   function startBidding() {
     gs.phase = 'BIDDING';
-    var mc = gs.modeConfig;
     var dealer = Engine.PLAYERS[gs.dealerIndex];
-    gs.bids = {
-      current: mc.dealerBid,
-      winner: dealer,
-      amount: mc.dealerBid,
-      passed: {},
-      acted: {},
-      log: [Engine.PLAYER_NAMES[dealer] + ': ' + mc.dealerBid + ' (mecburi)']
-    };
-    // Tek turlu ihale: herkes SADECE BIR KEZ konusur, en yuksegi soyleyen kazanir.
-    // Krupiye mecburi teklifiyle sirasini kullanmis sayilir.
-    gs.bids.acted[dealer] = true;
+    gs.bids = { current: 0, winner: null, amount: 0, passed: {}, acted: {}, log: [] };
     if (gs.gameMode === 'gommeli') { gs.bids.passed['north'] = true; gs.bids.acted['north'] = true; }
     gs.currentPlayerIndex = gs.dealerIndex;
-    Engine.nextPlayer(gs);
+    Engine.nextPlayer(gs); // sıra krupiyeden SONRAKİ oyuncuda başlar
     showBidOverlay();
     if (Engine.PLAYERS[gs.currentPlayerIndex] !== 'south') {
       setTimeout(botBidTurn, BOT_DELAY);
     }
+  }
+
+  function currentTurnMinBid() {
+    var mc = gs.modeConfig;
+    if (gs.bids.current > 0) return gs.bids.current + 1;
+    var player = Engine.PLAYERS[gs.currentPlayerIndex];
+    var dealer = Engine.PLAYERS[gs.dealerIndex];
+    return (player === dealer) ? mc.dealerBid : mc.startBid;
+  }
+
+  function currentTurnCanPass() {
+    var player = Engine.PLAYERS[gs.currentPlayerIndex];
+    var dealer = Engine.PLAYERS[gs.dealerIndex];
+    return !(player === dealer && gs.bids.current === 0); // krupiye, kimse yükseltmediyse pas diyemez
   }
 
   function showBidOverlay() {
@@ -1246,21 +1255,26 @@ var UI = (function() {
       return;
     }
     var maxBid = gs.modeConfig.maxTricks;
+    var minBid = currentTurnMinBid();
     var html = '';
-    for (var b = gs.bids.current + 1; b <= maxBid; b++) {
+    for (var b = minBid; b <= maxBid; b++) {
       html += '<button onclick="UI.placeBid(' + b + ')">' + b + '</button>';
     }
-    html += '<button class="pass-btn" onclick="UI.placeBid(0)">Pas</button>';
+    if (currentTurnCanPass()) html += '<button class="pass-btn" onclick="UI.placeBid(0)">Pas</button>';
     el.innerHTML = html;
   }
 
   function placeBid(amount) {
     if (Engine.PLAYERS[gs.currentPlayerIndex] !== 'south') return;
+    if (amount === 0 && !currentTurnCanPass()) return; // krupiye mecburi anında pas veremez
     processBid('south', amount);
   }
 
   function processBid(player, amount) {
     var name = Engine.PLAYER_NAMES[player];
+    var mc = gs.modeConfig;
+    var dealer = Engine.PLAYERS[gs.dealerIndex];
+    var mecburiAn = (player === dealer && gs.bids.current === 0); // krupiyeye sıra geldi, kimse yükseltmedi
     gs.bids.acted[player] = true;
     if (amount === 0) {
       gs.bids.passed[player] = true;
@@ -1269,7 +1283,7 @@ var UI = (function() {
       gs.bids.current = amount;
       gs.bids.winner = player;
       gs.bids.amount = amount;
-      gs.bids.log.push(name + ': ' + amount);
+      gs.bids.log.push(name + ': ' + amount + (mecburiAn && amount === mc.dealerBid ? ' (mecburi)' : ''));
       SFX.bidRaise();
     }
 
@@ -1308,7 +1322,8 @@ var UI = (function() {
 
   function botBidTurn() {
     var player = Engine.PLAYERS[gs.currentPlayerIndex];
-    var bid = BotAI.decideBid(gs.hands[player], gs.bids.current, gs.gameMode);
+    var bid = BotAI.decideBid(gs.hands[player], currentTurnMinBid(), gs.gameMode);
+    if (bid === 0 && !currentTurnCanPass()) bid = gs.modeConfig.dealerBid; // krupiye pas veremez: mecburiyi alır
     processBid(player, bid);
   }
 
