@@ -939,6 +939,8 @@ const SPECIALS = {
 // 35: DORT KAT KABUS — buyuk kombinasyon kulesi
 35: function(s){
   s.cameras.main.setBackgroundColor(0x120a1e);
+  s.add.text(400,78,'KULE KİLİTLİ 🔒 2 SARI ANAHTAR DÜĞMESİNE BAS 🔑\n(biri KAT 2\'de, biri TERS DÜNYADA — üstüne basınca yeşile döner)',
+    {fontFamily:'monospace',fontSize:'12px',color:'#9fb3d9',align:'center'}).setOrigin(.5).setDepth(1);
   // KAT 1 (zemin): kayan kapak
   s.plat(0,400,300,50);
   s.slideCover(300,400,90,1);
@@ -970,8 +972,9 @@ const SPECIALS = {
   s.gravZone(358,236,74,30);       // cukurun icinde: dusen olmez, ters doner
   s.keyPad(560,144,true);          // anahtar 2: kat 4 tabaninin ALTINDA
   s.gravZone(475,-10,80,40);       // tavan gediginin ustunde: normale don
-  // KAT 4: karanlik + illuzyon kaya + gizli diken + gorunmez yol + sahte kapi
-  s.trigger(340,200,()=>s.darknessOn(), 116,20);
+  // KAT 4: illuzyon kaya + gizli diken + gorunmez yol + sahte kapi
+  // NOT: karanlik BILEREK yok — golge+karanlik ve gorunmezyol+karanlik haksiz
+  // kombinasyonlardir (pickMechs'teki elemelerle ayni kural, bkz. ~1056)
   s.fakeBoulder(447,520,130, 116,20);
   s.popSpikes(380,130,2,447,26,400, 116,20);
   s.spikeRow(560,130,6,1);
