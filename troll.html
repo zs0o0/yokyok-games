@@ -18,9 +18,35 @@ canvas{display:block}
 <script>
 'use strict';
 // ---- Telegram WebApp ----
+let game; // asagida atanir; viewport senkronu game olusmadan once tetiklenebildigi icin onceden bildirilir
 const tg = window.Telegram && window.Telegram.WebApp;
-if (tg) { try { tg.ready(); tg.expand && tg.expand(); tg.disableVerticalSwipes && tg.disableVerticalSwipes(); } catch(e){} }
+if (tg) {
+  try {
+    tg.ready();
+    tg.expand && tg.expand();
+    tg.disableVerticalSwipes && tg.disableVerticalSwipes();
+    tg.requestFullscreen && tg.requestFullscreen(); // Bot API 8.0+: gercek tam ekran (Telegram basligi da gizlenir, expand() yetmez)
+  } catch(e){}
+}
 if (tg && tg.themeParams && tg.themeParams.bg_color) document.body.style.background = tg.themeParams.bg_color;
+
+// Telegram'in bildirdigi GERCEK gorunur yukseklik ile senkronize ol (rotasyonda dahil).
+// html/body {height:100%} Telegram'in ic WebView'inde her zaman dogru degeri vermiyor;
+// tg.viewportStableHeight/viewportHeight kesin kaynaktir. game.scale.refresh() Phaser'i
+// pencere resize olayi olmadan da yeni boyuta gore yeniden hizalar (FIT modu icin sart).
+function syncTgViewport(){
+  if (!tg) return;
+  const h = tg.viewportStableHeight || tg.viewportHeight || window.innerHeight;
+  document.body.style.height = h + 'px';
+  try { if (game && game.scale) game.scale.refresh(); } catch(e){}
+}
+if (tg) {
+  syncTgViewport();
+  tg.onEvent && tg.onEvent('viewportChanged', syncTgViewport);
+  tg.onEvent && tg.onEvent('fullscreenChanged', syncTgViewport);
+}
+window.addEventListener('orientationchange', ()=>setTimeout(syncTgViewport, 300));
+window.addEventListener('resize', ()=>{ try{ if (game && game.scale) game.scale.refresh(); }catch(e){} });
 
 // ---- Sabitler ----
 const W = 800, H = 450;
@@ -1262,7 +1288,7 @@ function genTower(s,lvl,rnd,diff){
 }
 
 // ---- Baslat ----
-const game = new Phaser.Game({
+game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
   width: W, height: CH,
