@@ -1043,7 +1043,9 @@ function pickMechs(lvl){
   const recent = new Set();
   for (let p=Math.max(16,lvl-3); p<lvl; p++) pickMechs(p).forEach(m=>recent.add(m));
   const diff = Math.min(1,(lvl-15)/45);
-  const k = Math.min(4, 2+Math.floor(diff*2+rnd()*1.5));
+  // kolaydan zora: mekanik sayisi tavani kademeli acilir (16-20: 2, 21-30: 3, 31+: 4)
+  const cap = lvl<21 ? 2 : lvl<31 ? 3 : 4;
+  const k = Math.min(cap, 2+Math.floor(diff*2+rnd()*1.5));
   const scored = poolFor(lvl).map(m=>({m:m, s:(recent.has(m)?1:0)+rnd()})).sort((a,b)=>a.s-b.s);
   let res = scored.slice(0,k).map(o=>o.m);
   // uyumsuz ikilileri ele

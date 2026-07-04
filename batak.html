@@ -94,8 +94,9 @@ body { display:flex; flex-direction:column; }
 /* ─── BOT HANDS (card backs) ─── */
 .bot-hand { position:absolute; display:flex; z-index:10; }
 #north-hand { top:8px; left:50%; transform:translateX(-50%); }
-#west-hand { left:8px; top:50%; transform:translateY(-50%) rotate(90deg); }
-#east-hand { right:8px; top:50%; transform:translateY(-50%) rotate(-90deg); }
+#west-hand { left:0; top:50%; transform:translateY(-50%); flex-direction:column; }
+#east-hand { right:0; top:50%; transform:translateY(-50%); flex-direction:column; }
+#west-hand .card-back, #east-hand .card-back { margin:-8px 0; }
 .card-back { width:28px; height:40px;
   background:
     repeating-linear-gradient(45deg, transparent, transparent 2px,
@@ -108,8 +109,8 @@ body { display:flex; flex-direction:column; }
 .bot-name { position:absolute; font-size:11px; opacity:0.7; text-align:center;
   white-space:nowrap; z-index:10; }
 #north-name { top:52px; left:50%; transform:translateX(-50%); }
-#west-name { left:52px; top:50%; transform:translateY(-50%); }
-#east-name { right:52px; top:50%; transform:translateY(-50%); }
+#west-name { left:32px; top:50%; transform:translateY(-50%); }
+#east-name { right:32px; top:50%; transform:translateY(-50%); }
 .dots { animation: dotsPulse 1s infinite; font-weight:bold; letter-spacing:1px; }
 @keyframes dotsPulse {
   0%,100% { opacity:0.2; }
@@ -694,7 +695,8 @@ var BotAI = (function() {
       else if (str >= 5.5) maxBid = 4;
     }
 
-    if (maxBid > currentBid) return currentBid + 1;
+    // Tek turlu ihale: bot tek sansini kullanir, elinin gercek maksimumunu soyler
+    if (maxBid > currentBid) return maxBid;
     return 0;
   }
 
@@ -1210,9 +1212,13 @@ var UI = (function() {
       winner: dealer,
       amount: mc.dealerBid,
       passed: {},
+      acted: {},
       log: [Engine.PLAYER_NAMES[dealer] + ': ' + mc.dealerBid + ' (mecburi)']
     };
-    if (gs.gameMode === 'gommeli') gs.bids.passed['north'] = true;
+    // Tek turlu ihale: herkes SADECE BIR KEZ konusur, en yuksegi soyleyen kazanir.
+    // Krupiye mecburi teklifiyle sirasini kullanmis sayilir.
+    gs.bids.acted[dealer] = true;
+    if (gs.gameMode === 'gommeli') { gs.bids.passed['north'] = true; gs.bids.acted['north'] = true; }
     gs.currentPlayerIndex = gs.dealerIndex;
     Engine.nextPlayer(gs);
     showBidOverlay();
@@ -1255,6 +1261,7 @@ var UI = (function() {
 
   function processBid(player, amount) {
     var name = Engine.PLAYER_NAMES[player];
+    gs.bids.acted[player] = true;
     if (amount === 0) {
       gs.bids.passed[player] = true;
       gs.bids.log.push(name + ': Pas');
@@ -1266,12 +1273,13 @@ var UI = (function() {
       SFX.bidRaise();
     }
 
-    var activeBidders = 0;
+    // Tek turlu ihale: konusmayan kaldi mi?
+    var bekleyen = 0;
     for (var i = 0; i < Engine.PLAYERS.length; i++) {
-      if (!gs.bids.passed[Engine.PLAYERS[i]]) activeBidders++;
+      if (!gs.bids.acted[Engine.PLAYERS[i]]) bekleyen++;
     }
 
-    if (activeBidders <= 1 && gs.bids.winner) {
+    if (bekleyen === 0 && gs.bids.winner) {
       gs.bids.log.push(Engine.PLAYER_NAMES[gs.bids.winner] + ' ihaleyi ' + gs.bids.amount + ' ile kazandı!');
       renderBidLog();
       setTimeout(function() {
@@ -1287,7 +1295,7 @@ var UI = (function() {
 
     do {
       Engine.nextPlayer(gs);
-    } while (gs.bids.passed[Engine.PLAYERS[gs.currentPlayerIndex]]);
+    } while (gs.bids.acted[Engine.PLAYERS[gs.currentPlayerIndex]]);
 
     renderBidLog();
     renderBidButtons();
