@@ -936,47 +936,42 @@ const SPECIALS = {
   s.add.text(400,110,'Her düşen kaya gerçek değildir — panik yapma.\nDikenli zemin geçilmez görünüyorsa... güven ve atla.',
     {fontFamily:'monospace',fontSize:'13px',color:'#9fb3d9',align:'center'}).setOrigin(.5).setDepth(1);
 },
-// 35: DORT KAT KABUS — buyuk kombinasyon kulesi
+// 35: DORT KAT KULE FINALI — ogretilen mekanikler kat kat, zorluk KADEMELI artar
+// (v2 yeniden tasarim: ters dunya + kuculme kombosu cikarildi — islevsiz ve adaletsizdi.
+//  Karanlik da yok: golge+karanlik ve gorunmezyol+karanlik haksiz, bkz. pickMechs ~1056.
+//  Kat tetikleri AYAK-SEVIYESI ince bantta (chh 4): alt kattan ziplayan erken tetiklemez.)
 35: function(s){
   s.cameras.main.setBackgroundColor(0x120a1e);
-  s.add.text(400,78,'KULE KİLİTLİ 🔒 2 SARI ANAHTAR DÜĞMESİNE BAS 🔑\n(biri KAT 2\'de, biri TERS DÜNYADA — üstüne basınca yeşile döner)',
+  s.add.text(400,78,'KULE KİLİTLİ 🔒 2 SARI ANAHTAR DÜĞMESİNE BAS 🔑\n(biri KAT 2\'de, biri KAT 3\'te — üstüne basınca yeşile döner)',
     {fontFamily:'monospace',fontSize:'12px',color:'#9fb3d9',align:'center'}).setOrigin(.5).setDepth(1);
-  // KAT 1 (zemin): kayan kapak
+  // KAT 1 (zemin, zorluk 1): kayan kapak + gecit altlarina basamaklar (mini kule deseni)
   s.plat(0,400,300,50);
   s.slideCover(300,400,90,1);
   s.plat(390,400,410,50);
   s.spikeRow(302,452,4,1);
-  // KAT 2 plakasi (310) + sahte gecit
+  s.plat(75,350,40,12); s.plat(685,350,40,12);
+  // KAT 2 plakasi (310) + sahte gecit (hucreler 60-130 ve 670-740)
   s.plat(0,310,60,14); s.plat(130,310,540,14); s.plat(740,310,60,14);
   s.fakeGate(310,70,60,670,'R',1);
-  // KAT 3 plakasi (220): sol gedik 60-130 (inis yolu; gedikten cikani plaka kenarindaki diken karsilar),
-  // sahte cukur 350-440, sag gedik 670-740 (ana rota)
-  s.plat(0,220,60,14); s.plat(130,220,220,14); s.plat(440,220,230,14); s.plat(740,220,60,14);
+  // KAT 3 plakasi (220): sol gedik 60-130 (kenar dikeni cikani caydirir),
+  // orta bosluk 350-440 (dusen Kat 2'ye iner, olmez), genis sag gedik 640-740 (cikis)
+  s.plat(0,220,60,14); s.plat(130,220,220,14); s.plat(440,220,200,14); s.plat(740,220,60,14);
   s.spikeRow(132,220,2,1);
-  // KAT 4 plakasi (130): gedik 250-320 (ters dunyadan cikis yolu)
-  s.plat(0,130,250,14); s.plat(320,130,480,14);
-  // TAVAN (30): gedik 480-540 (tavandaki sahte cukur — kat 4'e inis)
-  s.plat(0,30,480,12); s.plat(540,30,260,12);
-  // LAV: kat 2'ye cikinca yukselir, 316'da durur (kat 1 olur, kat 2+ guvenli — bulmaca zaman baskisiz)
-  s.trigger(0,800,()=>{ s.lavaRise(452,316,20000); s.toast('LAV! ⏫'); }, 296,20);
-  // KAT 2: gecikmeli kontrol (diken gecildikten SONRA baslar) + anahtar 1 + pusu blogu + dar tunel
-  s.trigger(260,500,()=>s.lagOn(), 296,20);
+  // KAT 4 plakasi (130): genis gedik 230-330 — Kat 3'ten duz ziplamayla cikilir
+  s.plat(0,130,230,14); s.plat(330,130,470,14);
+  // LAV: Kat 2'ye cikinca yukselir, 316'da durur (Kat 1 olur, Kat 2+ guvenli)
+  s.trigger(0,800,()=>{ s.lavaRise(452,316,20000); s.toast('LAV! ⏫'); }, 307,4);
+  // KAT 2 (zorluk 2): anahtar 1 + tek diken + gecikme (dikenden sonra) + yavas pusu blogu
   s.keyPad(150,310);
   s.spikeRow(200,310,1,1);
-  s.ambushBlock(360,310,300,-1,55, 296,20); // yavas itis: geri cekil, blok dikene varmadan durur ve kaybolur
-  s.sizeBtn(440,310,'small');
-  s.plat(500,274,120,14);
-  s.sizeBtn(640,310,'reset');
-  // KAT 3: lag biter, golge baslar; sahte cukur ters dunyaya acilir
-  s.trigger(490,140,()=>{ s.lagOff(); s.shadowsOn(1,3000); }, 206,20);
-  s.gravZone(358,236,74,30);       // cukurun icinde: dusen olmez, ters doner
-  s.keyPad(560,144,true);          // anahtar 2: kat 4 tabaninin ALTINDA
-  s.gravZone(475,-10,80,40);       // tavan gediginin ustunde: normale don
-  // KAT 4: illuzyon kaya + gizli diken + gorunmez yol + sahte kapi
-  // NOT: karanlik BILEREK yok — golge+karanlik ve gorunmezyol+karanlik haksiz
-  // kombinasyonlardir (pickMechs'teki elemelerle ayni kural, bkz. ~1056)
-  s.fakeBoulder(447,520,130, 116,20);
-  s.popSpikes(380,130,2,447,26,400, 116,20);
+  s.trigger(260,500,()=>s.lagOn(), 307,4);
+  s.ambushBlock(360,310,300,-1,55, 307,4); // yavas itis: geri cekil, blok dikene varmadan durur ve kaybolur
+  // KAT 3 (zorluk 3): lag biter, golge baslar (durma!); anahtar 2 duz yolda
+  s.trigger(440,200,()=>{ s.lagOff(); s.shadowsOn(1,3000); }, 217,4);
+  s.keyPad(560,220);
+  // KAT 4 (zorluk 4, final): illuzyon kaya + firlayan diken + gorunmez yol + sahte kapi
+  s.fakeBoulder(447,520,130, 128,4);
+  s.popSpikes(380,130,2,447,26,400, 128,4);
   s.spikeRow(560,130,6,1);
   s.ghostPlat(556,86,64); s.ghostPlat(630,86,64);
   s.mkDoor(350,130);               // gorunen kapi... SAHTE
