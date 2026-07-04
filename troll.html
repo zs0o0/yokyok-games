@@ -35,6 +35,9 @@ function sv(k,v){ try{ localStorage.setItem('yod_'+k, v); }catch(e){} }
 function ld(k,d){ try{ const v = localStorage.getItem('yod_'+k); return v===null ? d : +v; }catch(e){ return d; } }
 let DEATHS = ld('deaths', 0);
 
+// ---- Test kumu: troll.html?sandbox=1|2|3 (mekanik testleri, ilerleme kaydetmez) ----
+const SBX = (()=>{ const m = /[?&]sandbox=(\d)/.exec(location.search); return (m && +m[1]>=1 && +m[1]<=3) ? +m[1] : 0; })();
+
 // ---- Seedli RNG (bolum no = seed, ayni bolum hep ayni) ----
 function mulberry32(a){ return function(){ a|=0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a>>>15, 1|a); t = t + Math.imul(t ^ t>>>7, 61|t) ^ t; return ((t ^ t>>>14) >>> 0) / 4294967296; }; }
 
@@ -63,11 +66,17 @@ class Play extends Phaser.Scene {
 
   create(){
     mkTextures(this);
-    this.lvl = this.registry.get('lvl') || ld('lvl',1);
+    // ?lvl=N ile dogrudan bolum acilabilir (sadece ilk kurulumda gecerli)
+    const qm = /[?&]lvl=(\d+)/.exec(location.search);
+    this.lvl = this.registry.get('lvl') || (qm ? Math.max(1,+qm[1]) : 0) || ld('lvl',1);
     this.registry.set('lvl', this.lvl);
     this.dead=false; this.won=false; this.rev=false; this.gdir=1;
     this.darkOn=false; this.doorFlee=null; this.door=null;
     this.updaters=[]; this.jq=0; this.coyote=0;
+    this.walls=[]; this.consumed=[];
+    this.lagMs=0; this.inputQ=[]; this.lagRing=null; this.jpress=false;
+    this.recBuf=[]; this.shadows=[]; this._shadowSpecs=[]; this._shadowRec=false;
+    this.jumpMul=1; this._lock=0; this._lockCd=0; this._gvcd=0;
     this.paused=false; this.menuEls=[];
     this.physics.resume(); this.time.paused=false;
     if (this.lvl > ld('max',1)) sv('max',this.lvl);
@@ -83,7 +92,10 @@ class Play extends Phaser.Scene {
     this.player.body.setGravityY(GRAV);
 
     // bolumu kur
-    if (this.lvl <= 15) LEVELS[this.lvl-1](this); else genLevel(this,this.lvl);
+    if (SBX) SANDBOX[SBX-1](this);
+    else if (this.lvl <= 15) LEVELS[this.lvl-1](this);
+    else if (SPECIALS[this.lvl]) SPECIALS[this.lvl](this);
+    else genLevel(this,this.lvl);
 
     // platform carpismasi (+ basma tetikleyicileri: coken/kuculen)
     this.physics.add.collider(this.player, this.solids, (pl,ob)=>{
@@ -95,7 +107,7 @@ class Play extends Phaser.Scene {
     });
 
     // UI
-    this.add.text(12,10,'BÖLÜM '+this.lvl,{fontFamily:'monospace',fontSize:'18px',fontStyle:'bold',color:'#ffffff'}).setDepth(100).setAlpha(.92);
+    this.add.text(12,10,SBX?'TEST KUMU '+SBX:'BÖLÜM '+this.lvl,{fontFamily:'monospace',fontSize:'18px',fontStyle:'bold',color:'#ffffff'}).setDepth(100).setAlpha(.92);
     this.deathTxt = this.add.text(W-12,10,'💀 '+DEATHS,{fontFamily:'monospace',fontSize:'18px',fontStyle:'bold',color:'#ffffff'}).setOrigin(1,0).setDepth(100).setAlpha(.92);
 
     // girisler
@@ -191,7 +203,7 @@ class Play extends Phaser.Scene {
     hold(mk(64,'◀'),  v=>this.touch.l=v);
     hold(mk(172,'▶'), v=>this.touch.r=v);
     const j = mk(732,'⬆');
-    j.on('pointerdown', ()=>{ this.jq = this.time.now; j.setFillStyle(0xffffff,0.28); });
+    j.on('pointerdown', ()=>{ this.jpress = true; j.setFillStyle(0xffffff,0.28); });
     const joff = ()=>j.setFillStyle(0xffffff,0.10);
     j.on('pointerup', joff); j.on('pointerout', joff);
   }
@@ -207,14 +219,26 @@ class Play extends Phaser.Scene {
     if (this.touch.l) dir -= 1;
     if (this.touch.r) dir += 1;
     dir = Phaser.Math.Clamp(dir,-1,1);
+    let press = K.JustDown(this.cursors.up) || K.JustDown(this.keys.W) || K.JustDown(this.keys.SPACE) || this.jpress;
+    this.jpress = false;
+
+    // gecikmeli kontrol: girdiler kuyruga yazilir, lagMs sonra uygulanir
+    if (this.lagMs > 0 || this.inputQ.length){
+      this.inputQ.push({t:this.time.now, d:dir, p:press});
+      dir = 0; press = false;
+      while (this.inputQ.length && this.inputQ[0].t <= this.time.now - this.lagMs){
+        const r = this.inputQ.shift();
+        dir = r.d; if (r.p) press = true;
+      }
+    }
+
     if (this.rev) dir *= -1;
     b.setVelocityX(dir*SPEED);
-
-    if (K.JustDown(this.cursors.up) || K.JustDown(this.keys.W) || K.JustDown(this.keys.SPACE)) this.jq = this.time.now;
+    if (press) this.jq = this.time.now;
     const grounded = this.gdir>0 ? (b.blocked.down||b.touching.down) : (b.blocked.up||b.touching.up);
     if (grounded) this.coyote = this.time.now;
     if (this.jq && this.time.now-this.jq<140 && this.time.now-this.coyote<100){
-      b.setVelocityY(-JUMPV*this.gdir); this.jq = 0;
+      b.setVelocityY(-JUMPV*this.jumpMul*this.gdir); this.jq = 0;
     }
 
     if (this.player.y > H+60 || this.player.y < -60) return this.die();
@@ -242,6 +266,16 @@ class Play extends Phaser.Scene {
     if (d && d._fake){ if (!d._used) this.fakeSeq(d); return; } // sahte kapi ASLA kazandirmaz
     if (d && d._fleeing) return;                                // kacis sirasinda carpma kazandirmaz
     if (this.doorFlee && this.doorFlee.n > 0) return;
+    if (this._lock > 0){ // anahtar dugmelerine basilmadan kapi acilmaz
+      if (this.time.now > this._lockCd){ this._lockCd = this.time.now+800; this.toast('KİLİTLİ 🔒 anahtar kaldı: '+this._lock); }
+      return;
+    }
+    if (SBX){ // test kumunda ilerleme kaydedilmez
+      this.won = true;
+      this.cameras.main.flash(200,60,220,120);
+      this.time.delayedCall(500, ()=>this.scene.restart());
+      return;
+    }
     this.won = true;
     const nl = this.lvl+1;
     this.registry.set('lvl',nl); sv('lvl',nl);
@@ -314,18 +348,19 @@ class Play extends Phaser.Scene {
   }
 
   // ---- Tuzak mekanikleri (havuz: her biri bagimsiz) ----
-  // 1) Coken zemin: basinca titrer, sonra duser
+  // 1) Kayan zemin: basinca yuk altinda hafif coker, sonra altindan kayarak duser (titreme yok)
   fallPlat(x,y,w,h,delay,color){
     const p = this.plat(x,y,w,h,color);
+    p._orig = {x:x, y:y, w:w, h:h};
     p._onStand = (ob)=>{
       if (ob._t) return; ob._t = true;
-      this.tweens.add({targets:ob,x:ob.x+2,duration:35,yoyo:true,repeat:3});
-      this.time.delayedCall(delay==null?150:delay, ()=>{
+      const d = delay==null?150:delay;
+      this.tweens.add({targets:ob,y:ob.y+4,duration:d,ease:'Sine.easeIn'});
+      this.time.delayedCall(d, ()=>{
         if (!ob.body) return;
         ob.body.checkCollision.none = true;
-        ob.body.setImmovable(false);
-        ob.body.setAllowGravity(true);
-        this.tweens.add({targets:ob,alpha:0.5,duration:250});
+        this.consumed.push({o:ob._orig, ob:ob});
+        this.tweens.add({targets:ob,y:ob.y+300,alpha:0.35,duration:650,ease:'Quad.easeIn'});
       });
     };
     return p;
@@ -357,6 +392,7 @@ class Play extends Phaser.Scene {
       this.time.delayedCall(30, ()=>{
         if (!p.body) return;
         p.body.checkCollision.none = true;
+        this.consumed.push({o:{x:x, y:gy, w:w, h:h==null?50:h}, ob:p});
         this.tweens.add({targets:p,y:p.y+180,alpha:0.35,duration:260,ease:'Quad.easeIn'});
         this.cameras.main.shake(50,0.004);
       });
@@ -373,23 +409,22 @@ class Play extends Phaser.Scene {
   }
 
   // 3) Ters kontroller
-  reverseAt(tx,show){
+  reverseAt(tx,show,cy,chh){
     this.trigger(tx, 26, ()=>{
       this.rev = !this.rev;
       if (show) this.toast('KONTROLLER TERS!');
       this.cameras.main.shake(80,0.004);
-    });
+    }, cy, chh);
   }
 
   // 4) Yercekimi degisimi
-  gravityAt(tx){
-    this.trigger(tx, 26, ()=>{
-      this.gdir *= -1;
-      this.player.body.setGravityY(GRAV*this.gdir);
-      this.player.setFlipY(this.gdir<0);
-      this.cameras.main.flash(120,140,90,255);
-    });
+  flipGravity(){
+    this.gdir *= -1;
+    this.player.body.setGravityY(GRAV*this.gdir);
+    this.player.setFlipY(this.gdir<0);
+    this.cameras.main.flash(120,140,90,255);
   }
+  gravityAt(tx){ this.trigger(tx, 26, ()=>this.flipGravity()); }
 
   // 5) Karanlik: sadece oyuncunun etrafinda spot isigi kalir
   darknessOn(){
@@ -414,6 +449,10 @@ class Play extends Phaser.Scene {
         f.cd = this.time.now+450; f.n--;
         let nx = d.x + (d.x>=this.player.x ? f.hop : -f.hop);
         if (nx<f.minx || nx>f.maxx) nx = Phaser.Math.Clamp(2*this.player.x-d.x, f.minx, f.maxx);
+        // kapi kovalayan duvarin (kirmizi serit) arkasina kacamaz
+        let lo=f.minx, hi=f.maxx;
+        this.walls.forEach(w=>{ if (!w.body) return; if (w._spd>=0) lo=Math.max(lo,w.x+90); else hi=Math.min(hi,w.x-90); });
+        if (lo<hi) nx = Phaser.Math.Clamp(nx, lo, hi);
         d._fleeing = true;
         this.tweens.add({targets:d,x:nx,duration:150,ease:'Quad.easeOut',onComplete:()=>{ d._fleeing=false; }});
         this.tweens.add({targets:d,angle:d.x<nx?8:-8,duration:75,yoyo:true});
@@ -439,6 +478,9 @@ class Play extends Phaser.Scene {
       d.body.enable = false;
       this.tweens.add({targets:d,y:d.y+150,alpha:0,duration:400});
       this.mkDoor(cfg.realX, cfg.gy);
+      // tuketilen tuzak platformlari eski yerine doner — geri donus yolu garanti
+      this.consumed.forEach(c=>{ if (c.ob && c.ob.active) c.ob.destroy(); this.plat(c.o.x, c.o.y, c.o.w, c.o.h); });
+      this.consumed = [];
       cfg.arm.forEach(f=>f());
       this.time.delayedCall(900, ()=>{ if (t.active) t.destroy(); });
     });
@@ -451,6 +493,7 @@ class Play extends Phaser.Scene {
     this.physics.add.existing(wl);
     wl.body.setAllowGravity(false); wl.body.setImmovable(true);
     this.physics.add.overlap(this.player, wl, ()=>this.die());
+    wl._spd = speed; this.walls.push(wl);
     this.time.delayedCall(delay==null?500:delay, ()=>{
       if (!this.dead && !this.won && wl.body) wl.body.setVelocityX(speed);
     });
@@ -462,9 +505,221 @@ class Play extends Phaser.Scene {
     const p = this.plat(x,y,w,h||14);
     p._onStand = (ob)=>{
       if (ob._s) return; ob._s = true;
+      this.consumed.push({o:{x:x, y:y, w:w, h:h||14}, ob:ob});
       this.tweens.add({targets:ob,displayWidth:Math.max(14,w*0.14),duration:900,ease:'Sine.easeIn'});
     };
     return p;
+  }
+
+  // ---- FAZ 2 mekanikleri ----
+  // 11) Gecikmeli kontrol: girdiler lagMs (vars. 500ms) sonra uygulanir
+  lagOn(ms){
+    if (this.lagMs > 0) return;
+    this.lagMs = ms==null?500:ms;
+    this.toast('SİNYAL GECİKMESİ! ⌛');
+    this.cameras.main.flash(120,150,80,255);
+    const ring = this.add.circle(this.player.x,this.player.y,24,0x000000,0).setDepth(3);
+    ring.setStrokeStyle(3,0xb07cff,0.9);
+    this.lagRing = ring;
+    this.tweens.add({targets:ring,alpha:0.35,duration:400,yoyo:true,repeat:-1});
+    this.updaters.push(()=>{ if (this.lagRing) this.lagRing.setPosition(this.player.x,this.player.y); });
+  }
+  lagOff(){
+    if (this.lagMs === 0) return;
+    this.lagMs = 0; this.inputQ.length = 0;
+    if (this.lagRing){ this.lagRing.destroy(); this.lagRing = null; }
+    this.toast('SİNYAL GERİ GELDİ! ✓');
+  }
+  lagAt(tx){ this.trigger(tx, 26, ()=>this.lagOn()); }
+
+  // 12) Golge takipci: gecmis hareketleri birebir tekrar eden kopya(lar)
+  mkShadow(df){
+    const spr = this.physics.add.image(this.recBuf[0].x, this.recBuf[0].y, 'hero')
+      .setDepth(1).setTintFill(0x11142e).setAlpha(0);
+    spr.body.setAllowGravity(false); spr.body.setSize(14,20); // hosgorulu vurus kutusu
+    const sh = {spr:spr, df:df, born:this.time.now};
+    this.physics.add.overlap(this.player, spr, ()=>{
+      if (sh.spr.alpha < 0.35 || this.time.now - sh.born < 500) return; // dogum korumasi
+      this.die();
+    });
+    this.shadows.push(sh);
+  }
+  shadowsOn(n, stepMs){
+    const step = stepMs==null?3000:stepMs;
+    for (let i=1;i<=(n==null?1:n);i++) this._shadowSpecs.push(Math.round(step*i/16.7));
+    this._shadowSpecs.sort((a,b)=>a-b);
+    this.toast('GÖLGEN PEŞİNDE! 👻');
+    if (this._shadowRec) return;
+    this._shadowRec = true;
+    this.updaters.push(()=>{
+      // kayit kare tabanli: duraklatmada da tutarli kalir
+      this.recBuf.push({x:this.player.x, y:this.player.y, fy:this.player.flipY});
+      if (this.recBuf.length > 1200) this.recBuf.shift();
+      while (this._shadowSpecs.length && this.recBuf.length > this._shadowSpecs[0]+2)
+        this.mkShadow(this._shadowSpecs.shift());
+      for (let k=0;k<this.shadows.length;k++){
+        const sh = this.shadows[k], idx = this.recBuf.length-1-sh.df;
+        if (idx < 0) continue;
+        const r = this.recBuf[idx];
+        sh.spr.setPosition(r.x, r.y).setFlipY(r.fy);
+        if (sh.spr.alpha < 0.55) sh.spr.setAlpha(Math.min(0.55, sh.spr.alpha+0.02));
+      }
+    });
+  }
+  shadowAt(tx,n,step){ this.trigger(tx, 26, ()=>this.shadowsOn(n,step)); }
+
+  // 13) Yercekimi cukuru: dikensiz sahte cukur — dusen olmez, ters dunyaya gecer
+  gravZone(x,y,w,h){
+    const z = this.add.zone(x+w/2, y+h/2, w, h);
+    this.physics.add.existing(z);
+    z.body.setAllowGravity(false); z.body.moves = false;
+    this.physics.add.overlap(this.player, z, ()=>{
+      if (this.time.now < this._gvcd) return;
+      this._gvcd = this.time.now + 600;
+      this.flipGravity();
+      this.player.body.setVelocityY(250*this.gdir); // cukurdan disari itis
+    });
+    return z;
+  }
+  gravPit(x,gy,w){ return this.gravZone(x+8, gy+18, Math.max(20,w-16), 44); }
+
+  // 14) Boyut butonu: mode 'small' | 'big' | 'reset' (+extra: gizli tuzak cb)
+  heroSize(mode){
+    const sc = mode==='small'?0.55 : mode==='big'?1.6 : 1;
+    this.player.setScale(sc);
+    this.player.body.setSize(Math.round(22*sc), Math.round(28*sc));
+    this.jumpMul = mode==='small'?0.85 : 1;
+    this.cameras.main.flash(100,120,200,255);
+    this.toast(mode==='small'?'KÜÇÜLDÜN! 🐜' : mode==='big'?'DEVLEŞTİN! 🦖' : 'NORMALE DÖNDÜN');
+  }
+  sizeBtn(x,gy,mode,extra){
+    this.plat(x,gy-8,34,8,0x2a3550);
+    const cap = this.add.rectangle(x+17,gy-12,22,8, mode==='big'?0xe0793f:0x4fc3e0).setDepth(1);
+    this.physics.add.existing(cap);
+    cap.body.setAllowGravity(false); cap.body.setImmovable(true);
+    this.solids.add(cap);
+    cap._onStand = (ob)=>{
+      if (this.time.now < (ob._cd||0)) return; // tekrar kullanilabilir (geri donus yollari icin)
+      ob._cd = this.time.now + 900;
+      this.tweens.add({targets:ob,y:ob.y+4,duration:80,yoyo:true});
+      this.heroSize(mode);
+      if (extra && !ob._x){ ob._x = true; extra(); }
+    };
+    return cap;
+  }
+
+  // 15) Kayan kapak: zemin gibi; ustune basinca yana kayar, altindan cukur acilir
+  slideCover(x,gy,w,dir){
+    const p = this.plat(x,gy,w,50);
+    p._onStand = (ob)=>{
+      if (ob._c) return; ob._c = true;
+      this.time.delayedCall(110, ()=>{
+        if (!ob.body) return;
+        this.consumed.push({o:{x:x,y:gy,w:w,h:50}, ob:ob});
+        this.tweens.add({targets:ob, x:ob.x+(dir==null?1:dir)*(w+6), duration:230, ease:'Quad.easeIn'});
+        this.cameras.main.shake(60,0.004);
+      });
+    };
+    return p;
+  }
+
+  // 16) Pusu blogu: tetik gecilince beliren blok oyuncuyu iter (ty/th: tetik bandi)
+  ambushBlock(bx,gy,tx,dir,speed,ty,th){
+    this.trigger(tx, 26, ()=>{
+      const bl = this.add.rectangle(bx, gy-30, 34, 58, 0x8a5cd6).setDepth(2);
+      this.physics.add.existing(bl);
+      bl.body.setAllowGravity(false); bl.body.setImmovable(true);
+      this.solids.add(bl);
+      bl.setScale(0.2);
+      this.tweens.add({targets:bl,scaleX:1,scaleY:1,duration:130});
+      this.cameras.main.shake(60,0.004);
+      this.time.delayedCall(170, ()=>{ if (bl.body) bl.body.setVelocityX((dir==null?1:dir)*(speed||330)); });
+      this.time.delayedCall(1900, ()=>{
+        if (!bl.body) return;
+        bl.body.setVelocityX(0);
+        this.tweens.add({targets:bl,alpha:0,duration:300,onComplete:()=>{ if (bl.active) bl.destroy(); }});
+      });
+    }, ty, th);
+  }
+
+  // 17) Illuzyon kaya: dusen dev tas — sahte, dokunmaz (ty/th: tetik bandi)
+  fakeBoulder(tx,bx,gy,ty,th){
+    this.trigger(tx, 26, ()=>{
+      const g = this.add.circle(bx, -60, 34, 0x7d8aa8).setDepth(5);
+      g.setStrokeStyle(3,0x59637f,1);
+      this.tweens.add({targets:g, y: gy-34, duration:480, ease:'Quad.easeIn', onComplete:()=>{
+        this.cameras.main.shake(90,0.006);
+        this.tweens.add({targets:g, alpha:0, duration:600, delay:450, onComplete:()=>{ if (g.active) g.destroy(); }});
+      }});
+    }, ty, th);
+  }
+
+  // 18) Gorunmez platform: dikenlerin ustunde; basinca kisa sure belirir
+  ghostPlat(x,y,w){
+    const p = this.plat(x,y,w,12);
+    p.setAlpha(0.02);
+    p._onStand = (ob)=>{
+      if (ob._g) return; ob._g = true;
+      ob.setAlpha(0.5);
+      this.tweens.add({targets:ob, alpha:0.12, duration:500, delay:250, onComplete:()=>{ ob._g = false; }});
+    };
+    return p;
+  }
+
+  // 19) Anahtar dugmesi: tum anahtarlara basilmadan kapi acilmaz (win icindeki _lock)
+  // inv=true: tavana ters monte — sadece bas asagi (ters dunya) basilabilir
+  keyPad(x,gy,inv){
+    this._lock++;
+    this.plat(x, inv?gy:gy-8, 34, 8, 0x2a3550);
+    const cap = this.add.rectangle(x+17, inv?gy+12:gy-12, 22, 8, 0xffd35a).setDepth(1);
+    this.physics.add.existing(cap);
+    cap.body.setAllowGravity(false); cap.body.setImmovable(true);
+    this.solids.add(cap);
+    cap._onStand = (ob)=>{
+      if (ob._u) return; ob._u = true;
+      this._lock--;
+      ob.setFillStyle(0x53e6a8);
+      this.tweens.add({targets:ob,y:ob.y+4,duration:90});
+      this.toast(this._lock>0 ? 'ANAHTAR ✔ (kalan: '+this._lock+')' : 'KAPI AÇILDI! 🔓');
+    };
+    return cap;
+  }
+
+  // 20) Sahte gecit: kat gecidine yaklasinca kapanir, zit tarafta acilir (swaps kez)
+  fakeGate(fy,gapW,leftX,rightX,startSide,swaps){
+    const st = {side:(startSide||'R'), swaps:(swaps==null?1:swaps)};
+    const wallL = this.plat(leftX, fy, gapW, 14);
+    const wallR = this.plat(rightX, fy, gapW, 14);
+    const cell = sd => sd==='L'?wallL:wallR;
+    const open = sd => { const w=cell(sd); w.body.checkCollision.none = true;  this.tweens.add({targets:w,alpha:0,duration:140}); };
+    const close = sd => { const w=cell(sd); w.body.checkCollision.none = false; w.setAlpha(0); this.tweens.add({targets:w,alpha:1,duration:140}); this.cameras.main.shake(60,0.004); };
+    open(st.side);
+    this.updaters.push(()=>{
+      if (st.swaps <= 0) return;
+      const gx = (st.side==='L'?leftX:rightX)+gapW/2;
+      // oyuncu gecidin oldugu katin ALTINDA ve gecide yaklasti mi?
+      if (this.player.y > fy+14 && this.player.y < fy+120 && Math.abs(this.player.x-gx) < 70){
+        st.swaps--; close(st.side);
+        st.side = st.side==='L'?'R':'L';
+        open(st.side);
+        this.toast('GEÇİT KAÇTI! 😈');
+      }
+    });
+    return st;
+  }
+
+  // 21) Yukselen lav: topY'den toTopY'ye yukselir, dokunan olur
+  lavaRise(topY,toTopY,dur,delay){
+    const hh = 520;
+    const lv = this.add.rectangle(W/2, topY+hh/2, W, hh, 0xd2483c, 0.9).setDepth(4);
+    this.physics.add.existing(lv);
+    lv.body.setAllowGravity(false); lv.body.setImmovable(true);
+    this.physics.add.overlap(this.player, lv, ()=>this.die());
+    this.time.delayedCall(delay==null?0:delay, ()=>{
+      if (!this.dead && !this.won && lv.body)
+        this.tweens.add({targets:lv, y: toTopY+hh/2, duration:dur, ease:'Linear'});
+    });
+    return lv;
   }
 }
 
@@ -584,14 +839,17 @@ function(s){
   s.reverseAt(300,true);
   s.mkDoor(756,400);
 },
-// 14: Karanlik + kacan kapi + firlayan diken
+// 14: Karanlik + gizli cukur + kacan kapi + firlayan diken (zorlastirildi)
 function(s){
-  s.plat(0,400,800,50);
-  s.darknessAt(150);
-  s.popSpikes(340,400,2,280,26,140);
+  s.plat(0,400,250,50);
+  s.hiddenPit(250,400,100);
+  s.plat(350,400,450,50);
+  s.spikeRow(252,452,5,1);
+  s.darknessAt(140);
+  s.popSpikes(430,400,2,368,26,150, 330,150);
   s.spikeRow(700,400,2,1);
   s.mkDoor(500,400);
-  s.fleeingDoor(2,110,170,50,750);
+  s.fleeingDoor(4,110,150,60,660);
 },
 // 15: Final — yercekimi + dikenli duvar + coken zemin + son hamle dikenleri
 function(s){
@@ -611,9 +869,173 @@ function(s){
 }
 ];
 
+// ---- Ozel el yapimi bolumler (sabit adresler; digerleri prosedurel) ----
+const SPECIALS = {
+// 20: EGITIM — Gecikmeli Kontrol ("Sinyal Kesintisi")
+20: function(s){
+  s.plat(0,400,300,50);
+  s.add.text(240,326,'⚠ SİNYAL\nBÖLGESİ',{fontFamily:'monospace',fontSize:'12px',color:'#b07cff',align:'center'}).setOrigin(.5).setDepth(1);
+  s.lagAt(240);
+  s.plat(300,430,120,20); // dikensiz deneme cukuru: dusmek olum degil, kenardan cikilir
+  s.plat(420,400,140,50);
+  s.plat(640,380,70,14);
+  s.plat(720,400,80,50);
+  s.trigger(700,26,()=>s.lagOff());
+  s.popSpikes(730,400,1,712,20,160, 330,150);
+  s.mkDoor(768,400);
+},
+// 25: EGITIM — Golge Takipci ("Gecmisin Golgesi")
+25: function(s){
+  s.plat(0,400,800,50);
+  s.mkDoor(60,400);
+  s.keyPad(736,400);
+  s.plat(250,336,70,12); // siginak cikintilari
+  s.plat(500,336,70,12);
+  s.spikeRow(390,400,2,1);
+  s.shadowAt(150,1,3000);
+  s.add.text(400,110,'Kapı kilitli: sağ uçtaki düğmeye bas ve geri dön.\nGölgene DOKUNMA — durma, sığınak çıkıntılarını kullan!',
+    {fontFamily:'monospace',fontSize:'13px',color:'#9fb3d9',align:'center'}).setOrigin(.5).setDepth(1);
+},
+// 30: EGITIM — Kule ("Kacak Gecit"): sahte gecit + yukselen lav
+30: function(s){
+  s.plat(0,400,800,50);
+  [310,220].forEach(y=>{ s.plat(0,y,60,14); s.plat(130,y,540,14); s.plat(740,y,60,14); });
+  s.fakeGate(310,70,60,670,'R',1);
+  s.fakeGate(220,70,60,670,'L',1);
+  s.trigger(0,800,()=>{ s.lavaRise(452,240,22000); s.toast('LAV YÜKSELİYOR! ⏫'); }, 296,20);
+  s.add.text(400,80,'KULE: Geçide yaklaşınca kaçar — zıt uca koş!\nKata çıkınca LAV yükselir: aşağıda oyalanma.',
+    {fontFamily:'monospace',fontSize:'13px',color:'#9fb3d9',align:'center'}).setOrigin(.5).setDepth(1);
+  s.mkDoor(400,220);
+},
+// 31: EGITIM — Ters Dunya & Boyut ("Asagisi Yukarisi")
+31: function(s){
+  s.plat(0,0,560,20); s.plat(640,0,160,20); // tavan (gedik: 560-640)
+  s.plat(0,400,300,50);
+  s.gravPit(300,400,90);
+  s.plat(390,400,410,50);
+  s.gravZone(560,-30,80,46);
+  s.spikeRow(410,26,2,-1);        // tavan yuruyusunde engel
+  s.keyPad(500,20,true);          // anahtar TAVANDA — ters dunya sart
+  s.sizeBtn(440,400,'small');
+  s.plat(500,364,120,14);         // dar tunel (sadece kucuk gecer)
+  s.sizeBtn(640,400,'reset');
+  s.sizeBtn(704,400,'big', ()=>s.instantSpikes(660,400,2));
+  s.mkDoor(772,400);
+  s.add.text(400,190,'Kapı kilitli, anahtar TAVANDA: dikensiz çukur öldürmez,\nTERS DÜNYAYA geçirir. Tavandaki gedik normale döndürür.\nMavi buton KÜÇÜLTÜR (dar tünel) — turuncu butona dikkat...',
+    {fontFamily:'monospace',fontSize:'12px',color:'#9fb3d9',align:'center'}).setOrigin(.5).setDepth(1);
+},
+// 33: EGITIM — Illuzyonlar ("Gozune Inanma")
+33: function(s){
+  s.plat(0,400,800,50);
+  s.fakeBoulder(280,340,400);
+  s.popSpikes(230,400,2,290,20,400, 330,150); // panikle geri kacani cezalandirir
+  s.keyPad(480,400);
+  s.spikeRow(560,400,7,1);
+  s.ghostPlat(556,352,70); s.ghostPlat(636,352,70);
+  s.mkDoor(770,400);
+  s.add.text(400,110,'Her düşen kaya gerçek değildir — panik yapma.\nDikenli zemin geçilmez görünüyorsa... güven ve atla.',
+    {fontFamily:'monospace',fontSize:'13px',color:'#9fb3d9',align:'center'}).setOrigin(.5).setDepth(1);
+},
+// 35: DORT KAT KABUS — buyuk kombinasyon kulesi
+35: function(s){
+  s.cameras.main.setBackgroundColor(0x120a1e);
+  // KAT 1 (zemin): kayan kapak
+  s.plat(0,400,300,50);
+  s.slideCover(300,400,90,1);
+  s.plat(390,400,410,50);
+  s.spikeRow(302,452,4,1);
+  // KAT 2 plakasi (310) + sahte gecit
+  s.plat(0,310,60,14); s.plat(130,310,540,14); s.plat(740,310,60,14);
+  s.fakeGate(310,70,60,670,'R',1);
+  // KAT 3 plakasi (220): sol gedik 60-130 (inis yolu; gedikten cikani plaka kenarindaki diken karsilar),
+  // sahte cukur 350-440, sag gedik 670-740 (ana rota)
+  s.plat(0,220,60,14); s.plat(130,220,220,14); s.plat(440,220,230,14); s.plat(740,220,60,14);
+  s.spikeRow(132,220,2,1);
+  // KAT 4 plakasi (130): gedik 250-320 (ters dunyadan cikis yolu)
+  s.plat(0,130,250,14); s.plat(320,130,480,14);
+  // TAVAN (30): gedik 480-540 (tavandaki sahte cukur — kat 4'e inis)
+  s.plat(0,30,480,12); s.plat(540,30,260,12);
+  // LAV: kat 2'ye cikinca yukselir, 316'da durur (kat 1 olur, kat 2+ guvenli — bulmaca zaman baskisiz)
+  s.trigger(0,800,()=>{ s.lavaRise(452,316,20000); s.toast('LAV! ⏫'); }, 296,20);
+  // KAT 2: gecikmeli kontrol (diken gecildikten SONRA baslar) + anahtar 1 + pusu blogu + dar tunel
+  s.trigger(260,500,()=>s.lagOn(), 296,20);
+  s.keyPad(150,310);
+  s.spikeRow(200,310,1,1);
+  s.ambushBlock(360,310,300,-1,55, 296,20); // yavas itis: geri cekil, blok dikene varmadan durur ve kaybolur
+  s.sizeBtn(440,310,'small');
+  s.plat(500,274,120,14);
+  s.sizeBtn(640,310,'reset');
+  // KAT 3: lag biter, golge baslar; sahte cukur ters dunyaya acilir
+  s.trigger(490,140,()=>{ s.lagOff(); s.shadowsOn(1,3000); }, 206,20);
+  s.gravZone(358,236,74,30);       // cukurun icinde: dusen olmez, ters doner
+  s.keyPad(560,144,true);          // anahtar 2: kat 4 tabaninin ALTINDA
+  s.gravZone(475,-10,80,40);       // tavan gediginin ustunde: normale don
+  // KAT 4: karanlik + illuzyon kaya + gizli diken + gorunmez yol + sahte kapi
+  s.trigger(340,200,()=>s.darknessOn(), 116,20);
+  s.fakeBoulder(447,520,130, 116,20);
+  s.popSpikes(380,130,2,447,26,400, 116,20);
+  s.spikeRow(560,130,6,1);
+  s.ghostPlat(556,86,64); s.ghostPlat(630,86,64);
+  s.mkDoor(350,130);               // gorunen kapi... SAHTE
+  s.fakeWin(742,130,[]);
+},
+};
+
+// ---- Mekanik test kumu (?sandbox=1|2|3 — ilerleme kaydetmez) ----
+const SANDBOX = [
+// 1: kayan kapak + pusu blogu + illuzyon kaya + gorunmez yol
+function(s){
+  const L=(x,y,t)=>s.add.text(x,y,t,{fontFamily:'monospace',fontSize:'11px',color:'#9fb3d9',align:'center'}).setOrigin(.5).setDepth(1);
+  s.plat(0,400,180,50);
+  s.slideCover(180,400,90,1); s.spikeRow(182,452,4,1); L(225,368,'KAYAN\nKAPAK');
+  s.plat(270,400,530,50);
+  s.ambushBlock(300,400,340,1,330); s.spikeRow(430,400,2,1); L(345,330,'PUSU\nBLOĞU');
+  s.fakeBoulder(500,560,400); s.popSpikes(460,400,2,505,20,400, 330,150); L(560,330,'İLLÜZYON\nKAYA');
+  s.spikeRow(600,400,6,1);
+  s.ghostPlat(600,352,60); s.ghostPlat(672,352,60); L(660,300,'GÖRÜNMEZ YOL');
+  s.mkDoor(772,400);
+},
+// 2: sahte cukur/ters dunya + boyut butonlari
+function(s){
+  const L=(x,y,t)=>s.add.text(x,y,t,{fontFamily:'monospace',fontSize:'11px',color:'#9fb3d9',align:'center'}).setOrigin(.5).setDepth(1);
+  s.plat(0,0,560,20); s.plat(640,0,160,20); // tavan (gedik: 560-640)
+  s.plat(0,400,300,50);
+  s.gravPit(300,400,90); L(345,368,'DİKENSİZ ÇUKUR\n= TERS DÜNYA');
+  s.plat(390,400,410,50);
+  s.gravZone(560,-30,80,46); L(600,60,'TAVAN ÇUKURU\n= NORMALE DÖN');
+  s.sizeBtn(440,400,'small'); L(457,350,'KÜÇÜL');
+  s.plat(500,364,120,14); L(560,340,'DAR TÜNEL');
+  s.sizeBtn(640,400,'reset'); L(657,350,'NORMAL');
+  s.sizeBtn(704,400,'big', ()=>s.instantSpikes(660,400,2)); L(721,350,'BÜYÜ(!)');
+  s.mkDoor(772,400);
+},
+// 3: mini kule — sahte gecit + yukselen lav
+function(s){
+  const L=(x,y,t)=>s.add.text(x,y,t,{fontFamily:'monospace',fontSize:'11px',color:'#9fb3d9',align:'center'}).setOrigin(.5).setDepth(1);
+  s.plat(0,400,800,50);          // kat 1 zemini
+  s.plat(0,280,60,14);           // kat 2 tabani (gecit hucreleri fakeGate kurar)
+  s.plat(130,280,540,14);
+  s.plat(740,280,60,14);
+  s.fakeGate(280,70,60,670,'R',1);
+  s.plat(75,350,40,12);          // gecit altlarina basamaklar
+  s.plat(685,350,40,12);
+  s.trigger(0,800,()=>s.lavaRise(452,312,6000), 230,80); // kat 2'ye cikinca lav
+  L(400,240,'GEÇİDE YAKLAŞ → KAÇAR. ZIT TARAFTAN ÇIK — LAV GELİYOR!');
+  s.mkDoor(400,280);
+},
+];
+
 // ---- Sonsuz mod (bolum 16+): prosedurel uretim ----
-// Havuz: 15 bolumde ogretilen mekanikler
+// Havuz: ogretilen mekanikler bolum ilerledikce acilir ("ogret ve kombine et")
 const POOL = ['fall','pop','rev','grav','dark','flee','shrink','fake','wall','pit'];
+function poolFor(lvl){
+  const p = POOL.slice();
+  if (lvl>=21) p.push('lag');              // 20'de ogretildi
+  if (lvl>=26) p.push('shadow');           // 25'te ogretildi
+  if (lvl>=32) p.push('slide','ambush','keys'); // 30-31'de ogretildi
+  if (lvl>=36) p.push('boulder','ghostway');    // 33-35'te ogretildi
+  return p;
+}
 const mechCache = {};
 
 // Son 3 bolumun mekaniklerini deterministik takip eder (seed tabanli, memoize)
@@ -622,21 +1044,28 @@ function pickMechs(lvl){
   const rnd = mulberry32(lvl*7919+3);
   const recent = new Set();
   for (let p=Math.max(16,lvl-3); p<lvl; p++) pickMechs(p).forEach(m=>recent.add(m));
-  const diff = Math.min(1,(lvl-15)/20);
+  const diff = Math.min(1,(lvl-15)/45);
   const k = Math.min(4, 2+Math.floor(diff*2+rnd()*1.5));
-  const scored = POOL.map(m=>({m:m, s:(recent.has(m)?1:0)+rnd()})).sort((a,b)=>a.s-b.s);
+  const scored = poolFor(lvl).map(m=>({m:m, s:(recent.has(m)?1:0)+rnd()})).sort((a,b)=>a.s-b.s);
   let res = scored.slice(0,k).map(o=>o.m);
   // uyumsuz ikilileri ele
   if (res.includes('grav') && res.includes('fake')) res = res.filter(m=>m!=='fake');
   if (res.includes('fake') && res.includes('flee')) res = res.filter(m=>m!=='flee');
+  if (res.includes('lag') && res.includes('rev')) res = res.filter(m=>m!=='rev');      // ikisi birden kontrol bozar: haksiz
+  if (res.includes('lag') && res.includes('flee')) res = res.filter(m=>m!=='flee');    // lagli kapi kovalamak iskence
+  if (res.includes('shadow') && res.includes('dark')) res = res.filter(m=>m!=='dark'); // golge karanlikta gorunmez: haksiz
+  if (res.includes('ghostway') && res.includes('dark')) res = res.filter(m=>m!=='ghostway');
   mechCache[lvl] = res;
   return res;
 }
 
 function genLevel(s,lvl){
   const rnd = mulberry32((Math.imul(lvl,2654435761)>>>0)%4294967295+1);
-  const diff = Math.min(1,(lvl-15)/20); // zorluk 35. bolumde tavana ulasir, sabitlenir
+  const diff = Math.min(1,(lvl-15)/45); // zorluk 60. bolumde tavana ulasir, sabitlenir
   const mechs = pickMechs(lvl);
+
+  // her 5 bolumde bir: prosedurel kule (40, 45, 50, ...)
+  if (lvl>=40 && lvl%5===0) return genTower(s,lvl,rnd,diff);
 
   // bolum basina hafif renk varyasyonu (gorsel cesitlilik)
   const bgs = [0x10142a, 0x140f24, 0x0e1a22, 0x180f1e, 0x0d1526];
@@ -683,6 +1112,7 @@ function genLevel(s,lvl){
   if (mechs.includes('fall'))   pickN(1+Math.round(diff*2)).forEach(i=>plan[i].t='fall');
   if (mechs.includes('shrink')) pickN(1+Math.round(diff)).forEach(i=>plan[i].t='shrink');
   if (mechs.includes('pit'))    pickN(1+Math.round(diff)).forEach(i=>plan[i].t='pit');
+  if (mechs.includes('ghostway')) pickN(1+Math.round(diff)).forEach(i=>plan[i].t='ghost');
 
   // platformlari kur
   plan.forEach((p,i)=>{
@@ -690,8 +1120,11 @@ function genLevel(s,lvl){
     if (p.t==='fall') s.fallPlat(p.x,p.y,p.w,h,Math.round(300-120*diff));
     else if (p.t==='shrink') s.shrinkPlat(p.x,p.y,p.w,h);
     else if (p.t==='pit') s.hiddenPit(p.x,p.y,p.w,h);
+    else if (p.t==='ghost') s.ghostPlat(p.x,p.y,p.w);
     else s.plat(p.x,p.y,p.w,h);
   });
+  if (plan.some(p=>p.t==='ghost') && lvl<45)
+    s.time.delayedCall(600, ()=>s.toast('GÖRÜNMEZ YOL VAR... 👀'));
 
   // dip dikenleri (dusus = olum sinyali)
   s.spikeRow(0,452,40,1);
@@ -710,16 +1143,21 @@ function genLevel(s,lvl){
     }
   }
   if (mechs.includes('rev')){
-    // platformun ortasinda tetiklenir, sicrama aninda degil
-    const mp = plan[1+Math.floor(rnd()*Math.max(1,plan.length-2))];
-    s.reverseAt(mp.x+mp.w/2, lvl<26);
+    // ilk iki platform haric; sadece o platformun yuzeyinde tetiklenir (havada/ilk ziplamada degil)
+    const lo2 = Math.min(2, plan.length-2);
+    const mp = plan[lo2+Math.floor(rnd()*Math.max(1,plan.length-1-lo2))];
+    s.reverseAt(mp.x+mp.w/2, lvl<26, mp.y-24, 48);
   }
   if (mechs.includes('dark')) s.darknessAt(170);
   if (mechs.includes('flee') && last.w>=120)
     s.fleeingDoor(1+Math.round(diff*2), 110, 120, last.x+18, Math.min(776,last.x+last.w-18));
-  if (mechs.includes('fake'))
-    s.fakeWin(60, plan[0].y, [()=>s.chaser(830, -(110+80*diff), 200)]);
+  // NOT: platform zincirinde 'fake' yok — geri donus ziplamalari fiziksel olarak
+  // imkansiz olabildigi icin sahte kapi sadece duz koridor (genGround) tipinde kalir
   if (mechs.includes('wall')) s.chaser(-50, 100+90*diff, 900);
+  if (mechs.includes('lag'))    s.lagAt(plan[1].x+10);
+  if (mechs.includes('shadow')) s.shadowAt(Math.max(60,plan[1].x-20), 1+Math.round(diff), 2800);
+  if (mechs.includes('boulder')){ const bp = plan[Math.floor(plan.length/2)]; s.fakeBoulder(bp.x-40, bp.x+bp.w/2, bp.y); }
+  if (mechs.includes('keys'))   pickN(1+Math.round(diff)).forEach(i=>s.keyPad(plan[i].x+plan[i].w/2-17, plan[i].y));
   if (mechs.includes('grav')){
     s.plat(0,0,800,20);
     const t1 = plan[1].x-20, t2 = Math.max(plan[1].x+80, last.x-60);
@@ -741,11 +1179,12 @@ function genGround(s,lvl,rnd,diff,mechs){
     pits.push({x:Math.round(px), w:Math.round(85+rnd()*(30+25*diff))});
     px += 170+rnd()*130;
   }
-  // zemin parcalari (cukur aralari dolu)
-  let cur = 0;
+  // zemin parcalari (cukur aralari dolu) — 'slide' varsa ilk cukur kayan kapak olur
+  let cur = 0, slid = false;
   pits.forEach(p=>{
     s.plat(cur,400,p.x-cur,50);
-    s.hiddenPit(p.x,400,p.w);
+    if (!slid && mechs.includes('slide')){ slid = true; s.slideCover(p.x,400,p.w, rnd()<0.5?-1:1); }
+    else s.hiddenPit(p.x,400,p.w);
     s.spikeRow(p.x+2,452,Math.floor(p.w/20),1);
     cur = p.x+p.w;
   });
@@ -776,6 +1215,50 @@ function genGround(s,lvl,rnd,diff,mechs){
     if (!pits.some(p=>680>p.x-60 && 680<p.x+p.w+40))
       s.popSpikes(680,400,2,636,26,120, 330,150);
   }
+  if (mechs.includes('lag'))    s.lagAt(170+Math.floor(rnd()*140));
+  if (mechs.includes('shadow')) s.shadowAt(150, 1+Math.round(diff), 2800);
+  if (mechs.includes('ambush')){
+    const ax = 200+Math.floor(rnd()*300);
+    if (!pits.some(p=>ax>p.x-90 && ax<p.x+p.w+90)) s.ambushBlock(ax-64, 400, ax, 1, 300+80*diff);
+  }
+  if (mechs.includes('boulder')){
+    const tbx = 230+Math.floor(rnd()*250);
+    s.fakeBoulder(tbx, tbx+70, 400);
+  }
+  if (mechs.includes('keys')){
+    for (let c=0;c<1+Math.round(diff);c++){
+      const kx = 180+Math.floor(rnd()*420);
+      if (!pits.some(p=>kx+34>p.x-10 && kx<p.x+p.w+10)) s.keyPad(kx,400);
+    }
+  }
+}
+
+// ---- Prosedurel kule (40, 45, 50, ...): sahte gecitler + lav + kat mekanikleri ----
+function genTower(s,lvl,rnd,diff){
+  s.cameras.main.setBackgroundColor(0x160f26);
+  s.plat(0,400,800,50);
+  const kx = rnd()<0.5?170:600;   // anahtar konumu (220 plakasi)
+  const dx = rnd()<0.5?170:610;   // kapi konumu (130 plakasi)
+  [310,220,130].forEach(y=>{
+    s.plat(0,y,60,14); s.plat(130,y,540,14); s.plat(740,y,60,14);
+    s.fakeGate(y,70,60,670, rnd()<0.5?'L':'R', (diff>0.8 && rnd()<0.5)?2:1);
+    // yuzey dikenleri (gecitlerden, anahtardan ve kapidan uzak sabit yuvalar)
+    const slots = [180,270,360,450,540].filter(x=>
+      !(y===220 && Math.abs(x-kx)<80) && !(y===130 && Math.abs(x-dx)<80));
+    const n = Math.min(slots.length, 1+Math.round(rnd()+diff));
+    for (let c=0;c<n;c++){
+      const j = Math.floor(rnd()*slots.length);
+      s.spikeRow(slots[j], y, 2, 1); slots.splice(j,1);
+    }
+  });
+  s.spikeRow(200+Math.floor(rnd()*300),400,2,1);
+  // kat 2'ye cikinca lav yukselmeye baslar; en ust kat guvenli kalir
+  s.trigger(0,800,()=>{ s.lavaRise(452,150,Math.round(26000-9000*diff)); s.toast('LAV! YUKARI KAÇ ⏫'); }, 296,20);
+  // kat mekanikleri: 220 plakasinda lag, 130 plakasinda golge (45+)
+  s.trigger(0,800,()=>s.lagOn(), 206,20);
+  if (lvl>=45) s.trigger(0,800,()=>s.shadowsOn(1,3000), 116,20);
+  if (diff>0.6) s.keyPad(kx,220);
+  s.mkDoor(dx,130);
 }
 
 // ---- Baslat ----
